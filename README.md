@@ -57,11 +57,23 @@ video-compare-website/
 
 ## Running locally
 
-It's a static site — open `src/index.html` directly, or serve the folder:
+**Easiest — no server:** double-click **`video-compare.html`** at the repo root. It's a
+self-contained build (CSS + JS + icons inlined) that runs straight from `file://`.
+
+**Modular version** (`src/index.html`) needs a web server — browsers block ES-module loading
+over `file://`, so opening it directly shows a notice pointing to the standalone. Serve it with:
 
 ```bash
 python3 -m http.server 8000
 # then visit http://localhost:8000/src/index.html
+```
+
+### Building the standalone
+
+`video-compare.html` is generated from `src/` — after editing the source, regenerate it:
+
+```bash
+python3 tools/build-standalone.py
 ```
 
 ## Not yet (deferred)

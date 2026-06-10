@@ -142,6 +142,18 @@
 
 </div>
 
+<!-- file-guard:start (stripped from the standalone build) -->
+<script>
+if (location.protocol === 'file:') {
+  document.body.innerHTML = '<div style="font-family:DM Sans,system-ui,sans-serif;color:#ededf0;background:#0d0d0f;min-height:100vh;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;text-align:center;padding:40px;line-height:1.65">'
+    + '<div style="font-size:40px;opacity:.5">▦</div>'
+    + '<h2 style="font-weight:500;margin:0">Open the standalone file instead</h2>'
+    + '<p style="color:#999;max-width:440px;margin:0">This modular build needs a web server — browsers block ES-module loading over <code>file://</code>. Double-click <b style="color:#c8f03c">video-compare.html</b> (the self-contained build in the repo root), or use the live site:</p>'
+    + '<a style="color:#60b8ff" href="https://zamba-decart.github.io/video-compare-website/src/index.html">zamba-decart.github.io/video-compare-website</a>'
+    + '</div>';
+}
+</script>
+<!-- file-guard:end -->
 <script type="module" src="./js/app.js"></script>
 </body>
 </html>

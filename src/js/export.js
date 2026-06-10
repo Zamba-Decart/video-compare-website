@@ -1,25 +1,29 @@
 import { S, getSlot } from './state.js';
+import { dom } from './dom.js';
 import { stripExt } from './helpers.js';
 
-// Draw a video's current frame with the active view transforms applied,
-// optionally clipped to the right of `clipLeftRatio` (for slider mode).
-function drawTransformed(ctx, video, width, height, opacity = 1, clipLeftRatio = null) {
+// Draw a video's current frame with the active view transforms applied. The output canvas
+// represents the comp box (A's aspect, A fills it), so on-screen pan (CSS px relative to the
+// stage) is scaled to canvas px via `panScale`. When `clipFromPos` is set, B is clipped in the
+// SAME local space the DOM clipPath uses (x ≥ (pos-0.5)·W of the element box, post-transform),
+// so the exported wipe lines up with the live preview at any zoom.
+function drawTransformed(ctx, video, W, H, panScale, opacity, clipFromPos) {
   const iw = video.videoWidth;
   const ih = video.videoHeight;
   if (!iw || !ih) return;
-  const fit = Math.min(width / iw, height / ih);
+  const fit = Math.min(W / iw, H / ih);
   const drawW = iw * fit;
   const drawH = ih * fit;
 
   ctx.save();
-  if (clipLeftRatio !== null) {
-    ctx.beginPath();
-    ctx.rect(width * clipLeftRatio, 0, width * (1 - clipLeftRatio), height);
-    ctx.clip();
-  }
-  ctx.translate(width / 2 + S.panX, height / 2 + S.panY);
+  ctx.translate(W / 2 + S.panX * panScale, H / 2 + S.panY * panScale);
   ctx.rotate((S.rotation * Math.PI) / 180);
   ctx.scale((S.flipH ? -1 : 1) * S.zoom, (S.flipV ? -1 : 1) * S.zoom);
+  if (clipFromPos !== null) {
+    ctx.beginPath();
+    ctx.rect((clipFromPos - 0.5) * W, -H * 8, W * 16, H * 16);
+    ctx.clip();
+  }
   ctx.globalAlpha = opacity;
   ctx.drawImage(video, -drawW / 2, -drawH / 2, drawW, drawH);
   ctx.restore();
@@ -40,6 +44,9 @@ export function exportCurrentFrame() {
     h = Math.round(h * k);
   }
 
+  const compW = dom.comp.getBoundingClientRect().width || w;
+  const panScale = w / compW;   // on-screen CSS px → output canvas px
+
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -47,16 +54,27 @@ export function exportCurrentFrame() {
   ctx.fillStyle = '#0d0d0f';
   ctx.fillRect(0, 0, w, h);
 
-  drawTransformed(ctx, a.videoEl, w, h, 1, null);
+  drawTransformed(ctx, a.videoEl, w, h, panScale, 1, null);
 
   if (S.mode === 'slider') {
-    drawTransformed(ctx, b.videoEl, w, h, 1, S.pos);
-    ctx.fillStyle = '#c8f03c';
-    ctx.fillRect(w * S.pos - 1, 0, 2, h);
+    drawTransformed(ctx, b.videoEl, w, h, panScale, 1, S.pos);
+    // divider line, drawn in the same local space so it stays on the slice edge
+    ctx.save();
+    ctx.translate(w / 2 + S.panX * panScale, h / 2 + S.panY * panScale);
+    ctx.rotate((S.rotation * Math.PI) / 180);
+    ctx.scale((S.flipH ? -1 : 1) * S.zoom, (S.flipV ? -1 : 1) * S.zoom);
+    ctx.beginPath();
+    const x0 = (S.pos - 0.5) * w;
+    ctx.moveTo(x0, -h * 8);
+    ctx.lineTo(x0, h * 8);
+    ctx.strokeStyle = '#c8f03c';
+    ctx.lineWidth = 2 / S.zoom;   // → ~2px after the zoom scale
+    ctx.stroke();
+    ctx.restore();
   } else if (S.mode === 'dissolve') {
-    drawTransformed(ctx, b.videoEl, w, h, S.dissolve, null);
+    drawTransformed(ctx, b.videoEl, w, h, panScale, S.dissolve, null);
   } else {
-    drawTransformed(ctx, b.videoEl, w, h, S.toggleFrame === 'b' ? 1 : 0, null);
+    drawTransformed(ctx, b.videoEl, w, h, panScale, S.toggleFrame === 'b' ? 1 : 0, null);
   }
 
   canvas.toBlob((blob) => {

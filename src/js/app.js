@@ -1,4 +1,4 @@
-import { S, getSlot, MAX_SLOTS } from './state.js';
+import { S, MAX_SLOTS } from './state.js';
 import { dom } from './dom.js';
 import { initLoaders, openPicker, removeSlot, addFiles } from './loaders.js';
 import { initGrid, renderGrid } from './grid.js';
@@ -133,9 +133,20 @@ function onMeta() {
 
 // ---------- overlay interaction (ported from image tool) -----------------
 function getRelX(event) {
-  const rect = dom.stageWrap.getBoundingClientRect();
+  // Inverse of the shared view transform: map the pointer back to the slice fraction
+  // (local x of the element box) so the wipe tracks the cursor — and stays welded to the
+  // divider — under any zoom / pan / flip / rotation. Mirrors positionDivider() in viewer.js.
+  const cr = dom.comp.getBoundingClientRect();
+  const CW = cr.width || 1;
   const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-  return Math.max(0.001, Math.min(0.999, (clientX - rect.left) / rect.width));
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+  const qx = clientX - cr.left - CW / 2 - S.panX;
+  const qy = clientY - cr.top - cr.height / 2 - S.panY;
+  const th = (S.rotation * Math.PI) / 180;
+  const rx = Math.cos(th) * qx + Math.sin(th) * qy;   // R(-θ)·q, x component
+  const ax = S.zoom * (S.flipH ? -1 : 1);
+  const pos = 0.5 + (rx / ax) / CW;
+  return Math.max(0.001, Math.min(0.999, pos));
 }
 
 function clampPan() {
@@ -334,7 +345,20 @@ function bindFullscreenTracking() {
   document.addEventListener('fullscreenchange', () => {
     S.isFullscreen = !!document.fullscreenElement;
     dom.body.classList.toggle('is-fullscreen', S.isFullscreen);
+    if (S.view === 'overlay') renderOverlay();
   });
+}
+
+// The divider is positioned in absolute px from the comp box size, so it must be
+// recomputed whenever the stage resizes (window resize, fullscreen toggle, orientation,
+// aspect-ratio reflow) — otherwise the line goes stale while the %-based clip seam moves.
+function bindResizeTracking() {
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => { if (S.view === 'overlay') renderOverlay(); });
+    ro.observe(dom.stageWrap);
+  } else {
+    window.addEventListener('resize', () => { if (S.view === 'overlay') renderOverlay(); });
+  }
 }
 
 function init() {
@@ -345,6 +369,7 @@ function init() {
   bindOverlayInteraction();
   bindKeyboard();
   bindFullscreenTracking();
+  bindResizeTracking();
   dom.headerResetBtn.addEventListener('click', resetAll);
 
   // initial UI state

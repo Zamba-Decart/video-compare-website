@@ -43,6 +43,26 @@ function applyTransforms(els) {
   dom.resetViewBtn.classList.toggle('is-on', S.zoom > 1 || S.panX !== 0 || S.panY !== 0);
 }
 
+// Weld the wipe divider to B's real slice edge under ANY view transform.
+// The clip edge is the local vertical line x = pos·W of the (shared) element box.
+// Map its midpoint through the same transform = translate(pan) · rotate(θ) · scale(zoom·flip)
+// about the box centre, and rotate the line by θ. clipPath insets the element box, so the
+// horizontal scale (incl. flipH) is all that moves the edge along local x; flipV / the y-scale
+// leave a vertical edge unchanged. At zoom 1 / θ 0 this reduces to left = pos·W as before.
+function positionDivider() {
+  const cr = dom.comp.getBoundingClientRect();
+  const CW = cr.width;
+  const CH = cr.height;
+  const th = (S.rotation * Math.PI) / 180;
+  const ax = S.zoom * (S.flipH ? -1 : 1);
+  const off = ax * CW * (S.pos - 0.5);          // signed distance of the edge from centre, along local x
+  const midX = CW / 2 + S.panX + Math.cos(th) * off;
+  const midY = CH / 2 + S.panY + Math.sin(th) * off;
+  dom.divider.style.left = midX + 'px';
+  dom.divider.style.top = midY + 'px';
+  dom.divider.style.transform = `rotate(${S.rotation}deg)`;
+}
+
 export function renderOverlay() {
   if (S.view !== 'overlay') return;
   const a = getSlot(S.selA);
@@ -62,7 +82,7 @@ export function renderOverlay() {
     vb.style.clipPath = `inset(0 0 0 ${pct})`;
 
     dom.divider.style.display = 'block';
-    dom.divider.style.left = pct;
+    positionDivider();
 
     dom.lblA.style.display = 'block';
     dom.lblB.style.display = 'block';
