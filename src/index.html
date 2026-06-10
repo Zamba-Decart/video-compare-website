@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Comparator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon-180.png">
+<link rel="icon" type="image/png" sizes="512x512" href="../assets/favicon-512.png">
+<link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+
+<header>
+  <img class="logo-mark" src="../assets/favicon-512.png" alt="Video Compare logo">
+  <span class="logo">Comparator</span>
+  <span class="logo-sub">/ video diff tool</span>
+  <div class="header-reset-wrap">
+    <button class="header-reset-btn" id="header-reset-btn" type="button">↺ Reset All</button>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- ===== Upload ===== -->
+  <div class="dropzone" id="dz" tabindex="0">
+    <input type="file" accept="video/*" id="file-input" multiple>
+    <div class="dz-inner" id="dz-inner">
+      <div class="dz-icon">↑</div>
+      <div class="dz-label">Drop up to 4 videos here<br>or click to browse</div>
+      <span class="dz-tag">mp4 · webm · mov</span>
+    </div>
+  </div>
+
+  <!-- ===== Toolbar ===== -->
+  <div class="toolbar" id="toolbar" hidden>
+    <div class="view-pills">
+      <button class="vpill on" data-view="grid">▦ Grid</button>
+      <button class="vpill" data-view="overlay" id="view-overlay-btn">◧ Overlay</button>
+    </div>
+
+    <div class="mode-pills" id="mode-pills" hidden>
+      <button class="mpill on" data-mode="slider">⇔ Slider</button>
+      <button class="mpill" data-mode="dissolve">~ Dissolve</button>
+      <button class="mpill" data-mode="toggle">⊙ Toggle</button>
+    </div>
+
+    <div class="d-wrap" id="d-wrap" hidden style="opacity:0.3;pointer-events:none;">
+      <span>A</span>
+      <input type="range" id="d-range" min="0" max="1" step="0.01" value="0.5">
+      <span>B</span>
+      <span id="d-pct" style="min-width:34px;text-align:right;">50%</span>
+    </div>
+
+    <div class="select-status" id="select-status">Select 2 videos to overlay</div>
+    <div class="spacer"></div>
+
+    <div class="tool-pills">
+      <button class="tool-btn" id="add-more-btn">＋ Add videos</button>
+      <button class="tool-btn" id="swap-btn" hidden>⇄ Swap A / B</button>
+      <button class="tool-btn" id="flip-h-btn" hidden>⇋ Flip H</button>
+      <button class="tool-btn" id="flip-v-btn" hidden>⇵ Flip V</button>
+      <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
+      <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
+      <button class="tool-btn" id="export-btn" hidden>⇩ Frame PNG</button>
+      <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
+    </div>
+  </div>
+
+  <!-- ===== Stage ===== -->
+  <div class="stage-wrap" id="stage-wrap">
+    <div class="empty-state" id="empty-state">
+      <div class="es-icon">▦</div>
+      <div class="es-title">No videos loaded yet</div>
+      <div class="es-sub">Drop 3–4 videos above. They appear side by side and play in sync — then select two to overlay and compare.</div>
+    </div>
+
+    <!-- Grid / spread view -->
+    <div class="video-grid" id="video-grid"></div>
+
+    <!-- Overlay / compare view -->
+    <div id="comp">
+      <div id="divider">
+        <div id="div-line"></div>
+        <div id="div-knob">◀▶</div>
+      </div>
+      <div class="img-lbl" id="lbl-a">A</div>
+      <div class="img-lbl" id="lbl-b">B</div>
+      <div id="toggle-hint">click to toggle</div>
+    </div>
+  </div>
+
+  <!-- ===== Transport ===== -->
+  <div class="transport-bar" id="transport-bar" hidden>
+    <button class="t-ctl" id="frame-back-btn" title="Previous frame (,)">⏮</button>
+    <button class="t-ctl t-play" id="play-btn" title="Play / Pause (Space)">▶</button>
+    <button class="t-ctl" id="frame-fwd-btn" title="Next frame (.)">⏭</button>
+
+    <span class="t-time" id="t-cur">0:00.00</span>
+    <input type="range" class="t-scrub" id="scrub" min="0" max="1000" step="1" value="0">
+    <span class="t-time" id="t-dur">0:00.00</span>
+
+    <div class="t-divider"></div>
+
+    <button class="t-toggle" id="loop-btn" title="Loop (L)">🔁 Loop</button>
+    <button class="t-toggle on" id="autoplay-btn" title="Autoplay">⏯ Autoplay</button>
+    <button class="t-toggle" id="mute-btn" title="Mute (M)">🔇 Muted</button>
+
+    <select class="t-rate" id="rate-select" title="Playback speed">
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="1.5">1.5×</option>
+      <option value="2">2×</option>
+    </select>
+
+    <label class="t-fps" title="Frames per second used for frame stepping">
+      <span>fps</span>
+      <input type="number" id="fps-input" min="1" max="120" step="1" value="30">
+    </label>
+  </div>
+
+  <!-- ===== Info bar ===== -->
+  <div class="info-bar" id="info-bar">
+    <div class="info-list" id="info-list"></div>
+    <div style="flex:1"></div>
+    <div class="kbd-hints">
+      <span class="kbd">Space</span>play
+      <span class="kbd">, .</span>frame
+      <span class="kbd">S D T</span>modes
+      <span class="kbd">← →</span>scrub
+      <span class="kbd">wheel</span>zoom
+      <span class="kbd">shift+drag</span>pan
+      <span class="kbd">0</span>reset
+      <span class="kbd">L</span>loop
+      <span class="kbd">M</span>mute
+      <span class="kbd">F</span>full
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

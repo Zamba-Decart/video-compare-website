@@ -1,0 +1,9 @@
+.DS_Store
+*.log
+node_modules/
+temp/
+testing/clips/
+*.mp4
+*.webm
+*.mov
+.claude/
