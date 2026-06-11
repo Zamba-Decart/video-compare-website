@@ -19,8 +19,14 @@ export function renderGrid() {
     if (S.selA === slot.id) tile.classList.add('sel-a');
     if (S.selB === slot.id) tile.classList.add('sel-b');
 
-    // the (re-parented) video element
-    tile.appendChild(slot.videoEl);
+    // the (re-parented) video element — clear any overlay styling (clip/opacity/transform)
+    // so the grid always shows the full, untouched original frame.
+    const v = slot.videoEl;
+    v.style.transform = 'none';
+    v.style.transformOrigin = '';
+    v.style.clipPath = 'none';
+    v.style.opacity = '1';
+    tile.appendChild(v);
 
     // caption bar
     const bar = document.createElement('div');
