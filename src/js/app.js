@@ -13,8 +13,8 @@ import {
 import { exportCurrentFrame, exportGridFrame } from './export.js';
 import { stripExt } from './helpers.js';
 import {
-  initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow, cancelSessionSave,
-  restoreSession, renderSavesFromStore, clearAllSaved,
+  initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow,
+  restoreSession, renderSavesFromStore, invalidateSession,
 } from './saves.js';
 
 let restoreSeekTime = null;   // one-shot: seek to a restored session's saved time once metadata loads
@@ -185,12 +185,28 @@ function applyViewState(rec) {
   dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
 }
 
-// Restore a saved comparison: A/B already loaded as slots, set state + show overlay.
+// Reset the overlay view to defaults (used by saved-card restore — a fresh comparison).
+function resetViewState() {
+  S.mode = 'slider';
+  S.pos = 0.5;
+  S.dissolve = 0.5;
+  S.toggleFrame = 'a';
+  S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
+  document.querySelectorAll('.mpill').forEach((b) => b.classList.toggle('on', b.dataset.mode === 'slider'));
+  dom.dRange.value = '0.5';
+  dom.dPct.textContent = '50%';
+}
+
+// Restore a saved comparison: load just the two clips into a FRESH comparison
+// (default mode/positions/transforms, from the start) — not the saved positions.
 function applyRestoredComparison(rec, aId, bId) {
   S.selA = aId;
   S.selB = bId;
-  applyViewState(rec);
+  resetViewState();
+  S.curTime = 0;
+  restoreSeekTime = null;
   showOverlay();
+  if (S.autoplay) play();
 }
 
 // Restore a whole session (created = freshly-made slots, in order).
@@ -521,6 +537,7 @@ function bindKeyboard() {
 
 // Unload all videos + reset view to the empty dropzone (keeps saved comparisons).
 function clearWorkspace() {
+  invalidateSession();   // bump wipe-gen + cancel pending debounce so an in-flight save can't resurrect the cleared workspace
   pause();
   S.slots.slice().forEach((s) => removeSlot(s.id));
   S.selA = null; S.selB = null; S.view = 'grid';
@@ -530,10 +547,10 @@ function clearWorkspace() {
   updateChrome();
 }
 
-async function resetAll() {
-  if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
-  cancelSessionSave();   // stop any pending debounce from resurrecting state after the wipe
-  await clearAllSaved();
+// "Reset All" clears only the current comparison; saved comparisons are kept (delete those per-card).
+function resetAll() {
+  if (!S.slots.length) return;
+  if (!window.confirm('Clear the current videos? Your saved comparisons are kept.')) return;
   clearWorkspace();
 }
 

@@ -243,10 +243,15 @@ export async function restoreSession() {
   return true;
 }
 
+// Invalidate any pending/in-flight session save so a wipe/clear can't be resurrected.
+export function invalidateSession() {
+  wipeGen += 1;
+  cancelSessionSave();
+}
+
 // Wipe all persisted data (saves, session, stored video blobs).
 export async function clearAllSaved() {
-  wipeGen += 1;   // invalidate any in-flight saveSessionNow so it can't resurrect cleared data
-  cancelSessionSave();
+  invalidateSession();
   await safe(kvDel('saves'));
   await safe(kvDel('session'));
   try { const ids = (await safe(listBlobIds(), [])) || []; for (const id of ids) await safe(deleteBlob(id)); } catch (e) { /* ignore */ }
