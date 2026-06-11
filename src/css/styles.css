@@ -162,6 +162,30 @@ header {
   font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--muted); padding: 0 2px;
 }
+
+.ab-pickers { display: flex; gap: 6px; }
+.ab-pick {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 9px;
+  border-radius: 8px;
+  background: var(--surf);
+  border: 1px solid var(--border);
+}
+.ab-pick > span {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+}
+.ab-pick-a { border-color: rgba(200,240,60,0.4); }
+.ab-pick-a > span { color: var(--acc); }
+.ab-pick-b { border-color: rgba(96,184,255,0.4); }
+.ab-pick-b > span { color: var(--acc2); }
+.ab-pick select {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px; max-width: 140px;
+  padding: 4px 4px; border-radius: 6px;
+  background: var(--surf2); border: 1px solid var(--border);
+  color: var(--text); cursor: pointer;
+}
 .spacer { flex: 1; }
 .tool-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .tool-btn {

@@ -1,4 +1,4 @@
-import { S, MAX_SLOTS } from './state.js';
+import { S, getSlot, MAX_SLOTS } from './state.js';
 import { dom } from './dom.js';
 import { initLoaders, openPicker, removeSlot, addFiles } from './loaders.js';
 import { initGrid, renderGrid } from './grid.js';
@@ -11,6 +11,7 @@ import {
   renderOverlay, mountOverlay, applyAspectRatio, clearAspectRatio, renderInfoBar,
 } from './viewer.js';
 import { exportCurrentFrame } from './export.js';
+import { stripExt } from './helpers.js';
 
 const hasVideos = () => S.slots.length > 0;
 const canOverlay = () => S.selA && S.selB && S.selA !== S.selB;
@@ -26,6 +27,7 @@ function updateChrome() {
 
   const overlay = S.view === 'overlay';
   dom.modePills.hidden = !overlay;
+  dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
   [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn]
     .forEach((b) => { b.hidden = !overlay; });
@@ -70,6 +72,7 @@ function showOverlay() {
   applyAspectRatio();
   syncActive();
   updateChrome();
+  renderPickers();
   renderInfoBar();
   renderOverlay();
 }
@@ -80,16 +83,8 @@ function setView(view) {
 }
 
 // ---------- selection ----------------------------------------------------
-function onSelect(role, id) {
-  if (role === 'a') {
-    if (S.selB === id) S.selB = S.selA;   // swap if picking B's video as A
-    S.selA = (S.selA === id) ? null : id;
-  } else {
-    if (S.selA === id) S.selA = S.selB;
-    S.selB = (S.selB === id) ? null : id;
-  }
-  // Selection is only reachable from the grid (A/B buttons live on tiles),
-  // but stay robust if called while overlaying.
+// Re-render after the A/B selection changed (from grid pills, dropdowns, or cycling).
+function applyOverlayChange() {
   if (S.view === 'overlay') {
     if (!canOverlay()) { showGrid(); return; }
     dom.comp.querySelectorAll('video').forEach((v) => v.remove());
@@ -101,6 +96,64 @@ function onSelect(role, id) {
   }
   updateChrome();
   renderInfoBar();
+  renderPickers();
+}
+
+// Grid tile A/B buttons: clicking the active role toggles it off.
+function onSelect(role, id) {
+  if (role === 'a') {
+    if (S.selB === id) S.selB = S.selA;   // swap if picking B's video as A
+    S.selA = (S.selA === id) ? null : id;
+  } else {
+    if (S.selA === id) S.selA = S.selB;
+    S.selB = (S.selB === id) ? null : id;
+  }
+  applyOverlayChange();
+}
+
+// Dropdown / cycle: assign a clip to a side, swapping with the other side if it's the same
+// clip (so A and B are never the same video). No toggle-off.
+function setSide(role, id) {
+  if (!id || !getSlot(id)) return;
+  if (role === 'a') {
+    if (S.selA === id) return;
+    if (S.selB === id) S.selB = S.selA;
+    S.selA = id;
+  } else {
+    if (S.selB === id) return;
+    if (S.selA === id) S.selA = S.selB;
+    S.selB = id;
+  }
+  applyOverlayChange();
+}
+
+// Cycle a side to the next/prev loaded clip, skipping the other side and wrapping.
+function cycleSide(role, dir) {
+  if (S.view !== 'overlay') return;
+  const other = role === 'a' ? S.selB : S.selA;
+  const cur = role === 'a' ? S.selA : S.selB;
+  const cand = S.slots.map((s) => s.id).filter((id) => id !== other);
+  if (cand.length < 2) return;   // nothing else to cycle to
+  let i = cand.indexOf(cur);
+  if (i === -1) i = 0;
+  setSide(role, cand[(i + dir + cand.length) % cand.length]);
+}
+
+// Populate the A/B dropdowns with the loaded clips (overlay only).
+function renderPickers() {
+  if (S.view !== 'overlay') return;
+  const fill = (sel, selectedId) => {
+    sel.innerHTML = '';
+    S.slots.forEach((s) => {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = stripExt(s.name);
+      sel.appendChild(o);
+    });
+    if (selectedId) sel.value = selectedId;
+  };
+  fill(dom.pickA, S.selA);
+  fill(dom.pickB, S.selB);
 }
 
 function autoAssign() {
@@ -118,6 +171,7 @@ function onSlotsChanged() {
   syncActive();
   updateChrome();
   renderInfoBar();
+  renderPickers();
 
   if (hasVideos() && S.autoplay && !S.playing) play();
   if (!hasVideos()) { pause(); S.curTime = 0; updateScrub(0); }
@@ -128,6 +182,7 @@ function onMeta() {
   computeDuration();
   updateDurationDisplay();
   renderInfoBar();
+  renderPickers();
   if (S.autoplay && !S.playing && hasVideos()) play();
 }
 
@@ -274,6 +329,9 @@ function bindToolbar() {
     if (S.mode === 'dissolve') renderOverlay();
   });
 
+  dom.pickA.addEventListener('change', () => { setSide('a', dom.pickA.value); dom.pickA.blur(); });
+  dom.pickB.addEventListener('change', () => { setSide('b', dom.pickB.value); dom.pickB.blur(); });
+
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
   dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); });
@@ -327,6 +385,8 @@ function bindKeyboard() {
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e' && S.view === 'overlay') { e.preventDefault(); exportCurrentFrame(); }
+    else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
+    else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
 }
 

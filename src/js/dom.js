@@ -11,6 +11,9 @@ export const dom = {
   // toolbar
   toolbar: $('toolbar'),
   modePills: $('mode-pills'),
+  abPickers: $('ab-pickers'),
+  pickA: $('pick-a'),
+  pickB: $('pick-b'),
   dWrap: $('d-wrap'),
   dRange: $('d-range'),
   dPct: $('d-pct'),

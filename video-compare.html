@@ -175,6 +175,30 @@ header {
   font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--muted); padding: 0 2px;
 }
+
+.ab-pickers { display: flex; gap: 6px; }
+.ab-pick {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 9px;
+  border-radius: 8px;
+  background: var(--surf);
+  border: 1px solid var(--border);
+}
+.ab-pick > span {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+}
+.ab-pick-a { border-color: rgba(200,240,60,0.4); }
+.ab-pick-a > span { color: var(--acc); }
+.ab-pick-b { border-color: rgba(96,184,255,0.4); }
+.ab-pick-b > span { color: var(--acc2); }
+.ab-pick select {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px; max-width: 140px;
+  padding: 4px 4px; border-radius: 6px;
+  background: var(--surf2); border: 1px solid var(--border);
+  color: var(--text); cursor: pointer;
+}
 .spacer { flex: 1; }
 .tool-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .tool-btn {
@@ -495,6 +519,11 @@ body.is-fullscreen .stage-wrap {
       <button class="mpill" data-mode="toggle">⊙ Toggle</button>
     </div>
 
+    <div class="ab-pickers" id="ab-pickers" hidden title="Pick which clips to compare ( [ ] cycle B · Shift+[ ] cycle A )">
+      <label class="ab-pick ab-pick-a"><span>A</span><select id="pick-a"></select></label>
+      <label class="ab-pick ab-pick-b"><span>B</span><select id="pick-b"></select></label>
+    </div>
+
     <div class="d-wrap" id="d-wrap" hidden style="opacity:0.3;pointer-events:none;">
       <span>A</span>
       <input type="range" id="d-range" min="0" max="1" step="0.01" value="0.5">
@@ -579,6 +608,8 @@ body.is-fullscreen .stage-wrap {
       <span class="kbd">, .</span>frame
       <span class="kbd">S D T</span>modes
       <span class="kbd">← →</span>scrub
+      <span class="kbd">[ ]</span>cycle B
+      <span class="kbd">⇧[ ]</span>cycle A
       <span class="kbd">wheel</span>zoom
       <span class="kbd">shift+drag</span>pan
       <span class="kbd">0</span>reset
@@ -693,6 +724,9 @@ const dom = {
   // toolbar
   toolbar: $('toolbar'),
   modePills: $('mode-pills'),
+  abPickers: $('ab-pickers'),
+  pickA: $('pick-a'),
+  pickB: $('pick-b'),
   dWrap: $('d-wrap'),
   dRange: $('d-range'),
   dPct: $('d-pct'),
@@ -1388,13 +1422,15 @@ function exportCurrentFrame() {
 })();
 
 const __m_app = (function () {
-  const { S, MAX_SLOTS } = __m_state;
+  const { S, getSlot, MAX_SLOTS } = __m_state;
   const { dom } = __m_dom;
   const { initLoaders, openPicker, removeSlot, addFiles } = __m_loaders;
   const { initGrid, renderGrid } = __m_grid;
   const { play, pause, togglePlay, seek, seekFraction, frameStep, setMuted, setLoop, setAutoplay, setRate, syncActive, computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton } = __m_playback;
   const { renderOverlay, mountOverlay, applyAspectRatio, clearAspectRatio, renderInfoBar } = __m_viewer;
   const { exportCurrentFrame } = __m_export;
+  const { stripExt } = __m_helpers;
+
 
 
 
@@ -1417,6 +1453,7 @@ function updateChrome() {
 
   const overlay = S.view === 'overlay';
   dom.modePills.hidden = !overlay;
+  dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
   [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn]
     .forEach((b) => { b.hidden = !overlay; });
@@ -1461,6 +1498,7 @@ function showOverlay() {
   applyAspectRatio();
   syncActive();
   updateChrome();
+  renderPickers();
   renderInfoBar();
   renderOverlay();
 }
@@ -1471,16 +1509,8 @@ function setView(view) {
 }
 
 // ---------- selection ----------------------------------------------------
-function onSelect(role, id) {
-  if (role === 'a') {
-    if (S.selB === id) S.selB = S.selA;   // swap if picking B's video as A
-    S.selA = (S.selA === id) ? null : id;
-  } else {
-    if (S.selA === id) S.selA = S.selB;
-    S.selB = (S.selB === id) ? null : id;
-  }
-  // Selection is only reachable from the grid (A/B buttons live on tiles),
-  // but stay robust if called while overlaying.
+// Re-render after the A/B selection changed (from grid pills, dropdowns, or cycling).
+function applyOverlayChange() {
   if (S.view === 'overlay') {
     if (!canOverlay()) { showGrid(); return; }
     dom.comp.querySelectorAll('video').forEach((v) => v.remove());
@@ -1492,6 +1522,64 @@ function onSelect(role, id) {
   }
   updateChrome();
   renderInfoBar();
+  renderPickers();
+}
+
+// Grid tile A/B buttons: clicking the active role toggles it off.
+function onSelect(role, id) {
+  if (role === 'a') {
+    if (S.selB === id) S.selB = S.selA;   // swap if picking B's video as A
+    S.selA = (S.selA === id) ? null : id;
+  } else {
+    if (S.selA === id) S.selA = S.selB;
+    S.selB = (S.selB === id) ? null : id;
+  }
+  applyOverlayChange();
+}
+
+// Dropdown / cycle: assign a clip to a side, swapping with the other side if it's the same
+// clip (so A and B are never the same video). No toggle-off.
+function setSide(role, id) {
+  if (!id || !getSlot(id)) return;
+  if (role === 'a') {
+    if (S.selA === id) return;
+    if (S.selB === id) S.selB = S.selA;
+    S.selA = id;
+  } else {
+    if (S.selB === id) return;
+    if (S.selA === id) S.selA = S.selB;
+    S.selB = id;
+  }
+  applyOverlayChange();
+}
+
+// Cycle a side to the next/prev loaded clip, skipping the other side and wrapping.
+function cycleSide(role, dir) {
+  if (S.view !== 'overlay') return;
+  const other = role === 'a' ? S.selB : S.selA;
+  const cur = role === 'a' ? S.selA : S.selB;
+  const cand = S.slots.map((s) => s.id).filter((id) => id !== other);
+  if (cand.length < 2) return;   // nothing else to cycle to
+  let i = cand.indexOf(cur);
+  if (i === -1) i = 0;
+  setSide(role, cand[(i + dir + cand.length) % cand.length]);
+}
+
+// Populate the A/B dropdowns with the loaded clips (overlay only).
+function renderPickers() {
+  if (S.view !== 'overlay') return;
+  const fill = (sel, selectedId) => {
+    sel.innerHTML = '';
+    S.slots.forEach((s) => {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = stripExt(s.name);
+      sel.appendChild(o);
+    });
+    if (selectedId) sel.value = selectedId;
+  };
+  fill(dom.pickA, S.selA);
+  fill(dom.pickB, S.selB);
 }
 
 function autoAssign() {
@@ -1509,6 +1597,7 @@ function onSlotsChanged() {
   syncActive();
   updateChrome();
   renderInfoBar();
+  renderPickers();
 
   if (hasVideos() && S.autoplay && !S.playing) play();
   if (!hasVideos()) { pause(); S.curTime = 0; updateScrub(0); }
@@ -1519,6 +1608,7 @@ function onMeta() {
   computeDuration();
   updateDurationDisplay();
   renderInfoBar();
+  renderPickers();
   if (S.autoplay && !S.playing && hasVideos()) play();
 }
 
@@ -1665,6 +1755,9 @@ function bindToolbar() {
     if (S.mode === 'dissolve') renderOverlay();
   });
 
+  dom.pickA.addEventListener('change', () => { setSide('a', dom.pickA.value); dom.pickA.blur(); });
+  dom.pickB.addEventListener('change', () => { setSide('b', dom.pickB.value); dom.pickB.blur(); });
+
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
   dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); });
@@ -1718,6 +1811,8 @@ function bindKeyboard() {
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e' && S.view === 'overlay') { e.preventDefault(); exportCurrentFrame(); }
+    else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
+    else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
 }
 

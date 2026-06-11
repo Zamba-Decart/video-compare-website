@@ -30,7 +30,8 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
 |-----|--------|-----|--------|
 | `Space` | play / pause | `S` `D` `T` | slider / dissolve / toggle |
 | `,` `.` | step one frame back / fwd | `← →` | scrub (Shift = ±5s) |
-| `wheel` | zoom to cursor | `shift+drag` | pan |
+| `[` `]` | cycle clip B (Shift = clip A) | `wheel` | zoom to cursor |
+| `shift+drag` | pan | | |
 | `0` | reset view | `F` | fullscreen |
 | `L` | loop | `M` | mute |
 | `+` `-` | zoom in / out | `E` | export frame (overlay) |
