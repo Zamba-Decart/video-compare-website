@@ -26,7 +26,12 @@ export const dom = {
   rotateBtn: $('rotate-btn'),
   resetViewBtn: $('reset-view-btn'),
   exportBtn: $('export-btn'),
+  saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
+
+  // saved comparisons
+  savesRail: $('saves-rail'),
+  savesList: $('saves-list'),
 
   // stage
   stageWrap: $('stage-wrap'),

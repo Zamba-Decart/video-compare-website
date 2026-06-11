@@ -20,9 +20,14 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
   - **Slider** — draggable wipe between A and B
   - **Dissolve** — opacity blend (A↔B slider)
   - **Toggle** — click to flip between A and B
+- **Pick / swap the compared clips** without leaving overlay: A/B dropdowns, or `[` `]` / `Shift+[` `]`.
 - **Zoom & pan** (wheel to zoom to cursor, shift-drag or right-drag to pan), **flip H/V**,
   **rotate**, **reset view**, **swap A/B**, **fullscreen**.
 - **Export the current frame** of the comparison as a composited PNG.
+- **Save comparisons** (★ Save) to a "Saved comparisons" rail — stored locally in IndexedDB
+  (video data + settings, deduped, last ~12), restorable across reloads by clicking a card.
+- **Auto-restore** — your whole workspace (loaded clips + view + selection + settings) is
+  remembered and restored when you reopen the page. (↺ Reset All clears everything.)
 
 ## Keyboard
 
@@ -30,8 +35,8 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
 |-----|--------|-----|--------|
 | `Space` | play / pause | `S` `D` `T` | slider / dissolve / toggle |
 | `,` `.` | step one frame back / fwd | `← →` | scrub (Shift = ±5s) |
-| `[` `]` | cycle clip B (Shift = clip A) | `wheel` | zoom to cursor |
-| `shift+drag` | pan | | |
+| `<` `>` | inch the active slider / blend | `[` `]` | cycle clip B (Shift = clip A) |
+| `wheel` | zoom to cursor | `shift+drag` | pan |
 | `0` | reset view | `F` | fullscreen |
 | `L` | loop | `M` | mute |
 | `+` `-` | zoom in / out | `E` | export frame (overlay) |
@@ -79,7 +84,6 @@ python3 tools/build-standalone.py
 
 ## Not yet (deferred)
 
-- Persisting loaded videos across reloads (videos are large; re-drop each session).
-- Saved-comparison gallery, metadata sidecar parsing.
+- Metadata sidecar parsing.
 - Recording the overlay as a video (only single-frame PNG export today).
 - N-way overlay of 3–4 videos at once (overlay is 2-up; the grid shows all).

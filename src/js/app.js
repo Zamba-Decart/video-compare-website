@@ -12,6 +12,10 @@ import {
 } from './viewer.js';
 import { exportCurrentFrame } from './export.js';
 import { stripExt } from './helpers.js';
+import {
+  initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow,
+  restoreSession, renderSavesFromStore, clearAllSaved,
+} from './saves.js';
 
 const hasVideos = () => S.slots.length > 0;
 const canOverlay = () => S.selA && S.selB && S.selA !== S.selB;
@@ -29,7 +33,7 @@ function updateChrome() {
   dom.modePills.hidden = !overlay;
   dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
-  [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn]
+  [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn, dom.saveBtn]
     .forEach((b) => { b.hidden = !overlay; });
 
   // overlay pill availability
@@ -60,6 +64,7 @@ function showGrid() {
   syncActive();
   updateChrome();
   renderInfoBar();
+  scheduleSessionSave();
 }
 
 function showOverlay() {
@@ -67,6 +72,7 @@ function showOverlay() {
   S.view = 'overlay';
   dom.videoGrid.classList.remove('on');
   dom.videoGrid.innerHTML = '';   // release tiles; videos move into #comp
+  dom.comp.querySelectorAll('video').forEach((v) => v.remove());  // drop any stale overlay videos (e.g. restoring while already in overlay)
   mountOverlay();
   dom.comp.classList.add('ready');
   applyAspectRatio();
@@ -75,6 +81,7 @@ function showOverlay() {
   renderPickers();
   renderInfoBar();
   renderOverlay();
+  scheduleSessionSave();
 }
 
 function setView(view) {
@@ -97,6 +104,7 @@ function applyOverlayChange() {
   updateChrome();
   renderInfoBar();
   renderPickers();
+  scheduleSessionSave();
 }
 
 // Grid tile A/B buttons: clicking the active role toggles it off.
@@ -156,6 +164,53 @@ function renderPickers() {
   fill(dom.pickB, S.selB);
 }
 
+// Apply the overlay state (mode / positions / transforms) from a record onto S + UI.
+function applyViewState(rec) {
+  S.mode = rec.mode || 'slider';
+  S.pos = Number.isFinite(rec.pos) ? rec.pos : 0.5;
+  S.dissolve = Number.isFinite(rec.dissolve) ? rec.dissolve : 0.5;
+  S.toggleFrame = rec.toggleFrame || 'a';
+  S.zoom = Number.isFinite(rec.zoom) ? rec.zoom : 1;
+  S.panX = rec.panX || 0;
+  S.panY = rec.panY || 0;
+  S.rotation = rec.rotation || 0;
+  S.flipH = !!rec.flipH;
+  S.flipV = !!rec.flipV;
+  document.querySelectorAll('.mpill').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
+  dom.dRange.value = String(S.dissolve);
+  dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
+}
+
+// Restore a saved comparison: A/B already loaded as slots, set state + show overlay.
+function applyRestoredComparison(rec, aId, bId) {
+  S.selA = aId;
+  S.selB = bId;
+  applyViewState(rec);
+  showOverlay();
+}
+
+// Restore a whole session (created = freshly-made slots, in order).
+function applyRestoredSession(rec, created) {
+  S.loop = rec.loop !== false;
+  S.autoplay = rec.autoplay !== false;
+  S.muted = rec.muted !== false;
+  S.rate = Number.isFinite(rec.rate) ? rec.rate : 1;
+  S.fps = Number.isFinite(rec.fps) ? rec.fps : 30;
+  S.curTime = Number.isFinite(rec.curTime) ? rec.curTime : 0;
+  dom.rateSelect.value = String(S.rate);
+  dom.fpsInput.value = String(S.fps);
+  updateOptionButtons();
+
+  S.selA = (rec.selA >= 0 && S.slots[rec.selA]) ? S.slots[rec.selA].id : null;
+  S.selB = (rec.selB >= 0 && S.slots[rec.selB]) ? S.slots[rec.selB].id : null;
+  applyViewState(rec);
+
+  if (rec.view === 'overlay' && canOverlay()) showOverlay();
+  else showGrid();
+
+  if (S.autoplay) play();
+}
+
 function autoAssign() {
   if (!S.selA && S.slots[0]) S.selA = S.slots[0].id;
   if (!S.selB && S.slots[1] && S.slots[1].id !== S.selA) S.selB = S.slots[1].id;
@@ -175,6 +230,7 @@ function onSlotsChanged() {
 
   if (hasVideos() && S.autoplay && !S.playing) play();
   if (!hasVideos()) { pause(); S.curTime = 0; updateScrub(0); }
+  scheduleSessionSave();
 }
 
 function onMeta() {
@@ -228,12 +284,30 @@ function zoomBy(delta, clientX, clientY) {
   if (S.zoom === 1) { S.panX = 0; S.panY = 0; }
   clampPan();
   renderOverlay();
+  scheduleSessionSave();
+}
+
+// Inch the active comparison control: wipe position in Slider mode, blend in Dissolve mode.
+function nudgeActiveSlider(delta) {
+  if (S.view !== 'overlay') return;
+  if (S.mode === 'slider') {
+    S.pos = Math.max(0.001, Math.min(0.999, S.pos + delta));
+    renderOverlay();
+    scheduleSessionSave();
+  } else if (S.mode === 'dissolve') {
+    S.dissolve = Math.max(0, Math.min(1, S.dissolve + delta));
+    dom.dRange.value = String(S.dissolve);
+    dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
+    renderOverlay();
+    scheduleSessionSave();
+  }
 }
 
 function resetView() {
   S.flipH = false; S.flipV = false; S.rotation = 0;
   S.zoom = 1; S.panX = 0; S.panY = 0;
   renderOverlay();
+  scheduleSessionSave();
 }
 
 function swapAB() {
@@ -241,7 +315,9 @@ function swapAB() {
   [S.selA, S.selB] = [S.selB, S.selA];
   if (S.view === 'overlay') { dom.comp.querySelectorAll('video').forEach((v) => v.remove()); mountOverlay(); }
   renderInfoBar();
+  renderPickers();
   renderOverlay();
+  scheduleSessionSave();
 }
 
 function bindOverlayInteraction() {
@@ -268,7 +344,11 @@ function bindOverlayInteraction() {
     renderOverlay();
   });
 
-  document.addEventListener('mouseup', () => { S.dragging = false; S.panning = false; });
+  document.addEventListener('mouseup', () => {
+    const was = S.dragging || S.panning;
+    S.dragging = false; S.panning = false;
+    if (was) scheduleSessionSave();
+  });
 
   dom.stageWrap.addEventListener('touchstart', (e) => {
     if (S.view !== 'overlay') return;
@@ -283,13 +363,18 @@ function bindOverlayInteraction() {
     S.pos = getRelX(e); renderOverlay();
   }, { passive: true });
 
-  document.addEventListener('touchend', () => { S.dragging = false; S.panning = false; });
+  document.addEventListener('touchend', () => {
+    const was = S.dragging || S.panning;
+    S.dragging = false; S.panning = false;
+    if (was) scheduleSessionSave();
+  });
 
   // toggle-mode click
   dom.stageWrap.addEventListener('click', () => {
     if (S.view !== 'overlay' || S.mode !== 'toggle' || S.dragging) return;
     S.toggleFrame = S.toggleFrame === 'a' ? 'b' : 'a';
     renderOverlay();
+    scheduleSessionSave();
   });
 
   // wheel zoom
@@ -307,6 +392,7 @@ function setMode(mode) {
   if (mode === 'toggle') S.toggleFrame = 'a';
   if (S.view !== 'overlay' && canOverlay()) { showOverlay(); }
   renderOverlay();
+  scheduleSessionSave();
 }
 
 // ---------- fullscreen ---------------------------------------------------
@@ -327,6 +413,7 @@ function bindToolbar() {
     S.dissolve = parseFloat(dom.dRange.value);
     dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
     if (S.mode === 'dissolve') renderOverlay();
+    scheduleSessionSave();
   });
 
   dom.pickA.addEventListener('change', () => { setSide('a', dom.pickA.value); dom.pickA.blur(); });
@@ -334,11 +421,12 @@ function bindToolbar() {
 
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
-  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); });
-  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; renderOverlay(); });
-  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; renderOverlay(); });
+  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); scheduleSessionSave(); });
+  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; renderOverlay(); scheduleSessionSave(); });
+  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; renderOverlay(); scheduleSessionSave(); });
   dom.resetViewBtn.addEventListener('click', resetView);
   dom.exportBtn.addEventListener('click', exportCurrentFrame);
+  dom.saveBtn.addEventListener('click', () => { saveCurrentComparison(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 }
 
@@ -354,11 +442,11 @@ function bindTransport() {
   dom.scrub.addEventListener('change', () => { S.scrubbing = false; });
   ['mouseup', 'touchend'].forEach((ev) => dom.scrub.addEventListener(ev, () => { S.scrubbing = false; }));
 
-  dom.loopBtn.addEventListener('click', () => setLoop(!S.loop));
-  dom.autoplayBtn.addEventListener('click', () => setAutoplay(!S.autoplay));
-  dom.muteBtn.addEventListener('click', () => setMuted(!S.muted));
-  dom.rateSelect.addEventListener('change', () => setRate(parseFloat(dom.rateSelect.value)));
-  dom.fpsInput.addEventListener('change', () => { S.fps = Math.max(1, Math.min(120, parseInt(dom.fpsInput.value, 10) || 30)); });
+  dom.loopBtn.addEventListener('click', () => { setLoop(!S.loop); scheduleSessionSave(); });
+  dom.autoplayBtn.addEventListener('click', () => { setAutoplay(!S.autoplay); scheduleSessionSave(); });
+  dom.muteBtn.addEventListener('click', () => { setMuted(!S.muted); scheduleSessionSave(); });
+  dom.rateSelect.addEventListener('change', () => { setRate(parseFloat(dom.rateSelect.value)); scheduleSessionSave(); });
+  dom.fpsInput.addEventListener('change', () => { S.fps = Math.max(1, Math.min(120, parseInt(dom.fpsInput.value, 10) || 30)); scheduleSessionSave(); });
 }
 
 function bindKeyboard() {
@@ -385,18 +473,21 @@ function bindKeyboard() {
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e' && S.view === 'overlay') { e.preventDefault(); exportCurrentFrame(); }
+    else if (e.shiftKey && e.code === 'Comma') { e.preventDefault(); nudgeActiveSlider(e.altKey ? -0.05 : -0.01); }   // <
+    else if (e.shiftKey && e.code === 'Period') { e.preventDefault(); nudgeActiveSlider(e.altKey ? 0.05 : 0.01); }    // >
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
     else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
 }
 
 async function resetAll() {
-  if (!window.confirm('Reset everything and clear all loaded videos?')) return;
+  if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
   pause();
   S.slots.slice().forEach((s) => removeSlot(s.id));
   S.selA = null; S.selB = null; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
+  await clearAllSaved();
   showGrid();
   updateChrome();
 }
@@ -421,9 +512,10 @@ function bindResizeTracking() {
   }
 }
 
-function init() {
+async function init() {
   initLoaders({ onChange: onSlotsChanged, onMeta });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
+  initSaves({ onApply: applyRestoredComparison, onApplySession: applyRestoredSession });
   bindToolbar();
   bindTransport();
   bindOverlayInteraction();
@@ -432,12 +524,20 @@ function init() {
   bindResizeTracking();
   dom.headerResetBtn.addEventListener('click', resetAll);
 
+  // flush the session before the tab is hidden/closed (debounce may not have fired)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSessionNow(); });
+  window.addEventListener('pagehide', () => { saveSessionNow(); });
+
   // initial UI state
   dom.fpsInput.value = String(S.fps);
   dom.rateSelect.value = String(S.rate);
   updateOptionButtons();
   updatePlayButton();
   updateChrome();
+
+  // restore the last workspace (if any), then render the saved-comparisons gallery
+  try { await restoreSession(); } catch (e) { /* ignore */ }
+  try { await renderSavesFromStore(); } catch (e) { /* ignore */ }
 }
 
 init();

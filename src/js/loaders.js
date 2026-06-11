@@ -56,6 +56,28 @@ function createVideoEl(slot) {
   return v;
 }
 
+// Stable id for dedup/persistence (same file → same id across saves/sessions).
+export function blobIdFor(file, name) {
+  return `${name || file.name || 'clip'}__${file.size || 0}__${file.lastModified || 0}`;
+}
+
+function makeSlot(blob, name, blobId) {
+  const slot = {
+    id: nextId(),
+    file: blob,
+    blobId: blobId || blobIdFor(blob, name),
+    url: URL.createObjectURL(blob),
+    name,
+    w: 0,
+    h: 0,
+    duration: 0,
+    ready: false,
+    videoEl: null,
+  };
+  slot.videoEl = createVideoEl(slot);
+  return slot;
+}
+
 export function addFiles(fileList) {
   const files = Array.from(fileList || []).filter((f) => f.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(f.name));
   if (!files.length) return;
@@ -67,23 +89,24 @@ export function addFiles(fileList) {
       window.alert(`Up to ${MAX_SLOTS} videos at a time. Remove one to add more.`);
       break;
     }
-    const slot = {
-      id: nextId(),
-      file,
-      url: URL.createObjectURL(file),
-      name: file.name,
-      w: 0,
-      h: 0,
-      duration: 0,
-      ready: false,
-      videoEl: null,
-    };
-    slot.videoEl = createVideoEl(slot);
-    S.slots.push(slot);
+    S.slots.push(makeSlot(file, file.name));
     added += 1;
   }
 
   if (added) onChange();
+}
+
+// Restore a clip from a stored blob (used by saved-comparison / session restore).
+// Reuses an already-loaded slot with the same blobId if present. Pass triggerChange=false
+// to batch several restores and fire onChange once.
+export function addBlobSlot(blob, name, blobId, triggerChange = true) {
+  const existing = S.slots.find((s) => (s.blobId || blobIdFor(s.file, s.name)) === blobId);
+  if (existing) return existing;
+  if (S.slots.length >= MAX_SLOTS) return null;
+  const slot = makeSlot(blob, name, blobId);
+  S.slots.push(slot);
+  if (triggerChange) onChange();
+  return slot;
 }
 
 export function removeSlot(id) {

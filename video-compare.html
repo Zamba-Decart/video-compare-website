@@ -463,6 +463,59 @@ header {
   color: var(--muted); margin: 0 4px 0 10px;
 }
 
+/* ===== Saved comparisons rail ===== */
+.saves-rail {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.saves-head {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--acc);
+}
+.saves-head span { color: var(--muted); letter-spacing: 0.04em; text-transform: none; }
+.saves-list {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
+}
+.save-card {
+  position: relative; flex: 0 0 auto;
+  width: 150px;
+  border: 1px solid var(--border);
+  border-radius: 10px; background: var(--surf2);
+  overflow: hidden;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.save-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+.save-open {
+  display: block; width: 100%; padding: 0; border: 0; cursor: pointer;
+  background: #0a0a0c; position: relative;
+}
+.save-thumb { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #0a0a0c; }
+.save-mode {
+  position: absolute; bottom: 6px; left: 6px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  background: rgba(0,0,0,0.7); color: var(--acc);
+  padding: 2px 7px; border-radius: 999px;
+}
+.save-del {
+  position: absolute; top: 6px; right: 6px;
+  width: 22px; height: 22px; border-radius: 999px; line-height: 1; font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.55); color: #fff; cursor: pointer;
+}
+.save-del:hover { background: rgba(239,68,68,0.9); border-color: rgba(239,68,68,0.9); }
+.save-meta { padding: 7px 9px; display: flex; flex-direction: column; gap: 2px; }
+.save-label {
+  font-size: 11px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.save-time { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+body.is-fullscreen .saves-rail { display: none; }
+
 /* ===== Fullscreen ===== */
 body.is-fullscreen header,
 body.is-fullscreen .dropzone,
@@ -542,6 +595,7 @@ body.is-fullscreen .stage-wrap {
       <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
       <button class="tool-btn" id="export-btn" hidden>⇩ Frame PNG</button>
+      <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
     </div>
   </div>
@@ -617,6 +671,12 @@ body.is-fullscreen .stage-wrap {
       <span class="kbd">M</span>mute
       <span class="kbd">F</span>full
     </div>
+  </div>
+
+  <!-- ===== Saved comparisons ===== -->
+  <div class="saves-rail" id="saves-rail" hidden>
+    <div class="saves-head">Saved comparisons <span>· click to restore</span></div>
+    <div class="saves-list" id="saves-list"></div>
   </div>
 
 </div>
@@ -739,7 +799,12 @@ const dom = {
   rotateBtn: $('rotate-btn'),
   resetViewBtn: $('reset-view-btn'),
   exportBtn: $('export-btn'),
+  saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
+
+  // saved comparisons
+  savesRail: $('saves-rail'),
+  savesList: $('saves-list'),
 
   // stage
   stageWrap: $('stage-wrap'),
@@ -773,6 +838,55 @@ const dom = {
 };
 
   return { dom };
+})();
+
+const __m_storage = (function () {
+
+// Tiny IndexedDB wrapper: a `blobs` store (video bytes, keyed by a content id) and a
+// `kv` store (saved-comparisons array + session record). All calls reject on failure;
+// callers wrap in try/catch so the app still works when storage is unavailable
+// (private mode, some file:// contexts, quota errors).
+const DB_NAME = 'video-compare-db';
+const DB_VERSION = 1;
+let dbPromise = null;
+
+function openDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') { reject(new Error('no indexedDB')); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs');
+      if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+
+function run(store, mode, fn) {
+  return openDB().then((db) => new Promise((resolve, reject) => {
+    const t = db.transaction(store, mode);
+    const req = fn(t.objectStore(store));
+    t.oncomplete = () => resolve(req ? req.result : undefined);
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error);
+  }));
+}
+
+const putBlob = (id, blob, name) => run('blobs', 'readwrite', (s) => s.put({ blob, name }, id));
+const getBlob = (id) => run('blobs', 'readonly', (s) => s.get(id));
+const deleteBlob = (id) => run('blobs', 'readwrite', (s) => s.delete(id));
+const listBlobIds = () => run('blobs', 'readonly', (s) => s.getAllKeys());
+const hasBlob = (id) => getBlob(id).then((v) => !!v);
+
+const kvGet = (key) => run('kv', 'readonly', (s) => s.get(key));
+const kvSet = (key, val) => run('kv', 'readwrite', (s) => s.put(val, key));
+const kvDel = (key) => run('kv', 'readwrite', (s) => s.delete(key));
+
+  return { putBlob, getBlob, deleteBlob, listBlobIds, hasBlob, kvGet, kvSet, kvDel };
 })();
 
 const __m_loaders = (function () {
@@ -837,6 +951,28 @@ function createVideoEl(slot) {
   return v;
 }
 
+// Stable id for dedup/persistence (same file → same id across saves/sessions).
+function blobIdFor(file, name) {
+  return `${name || file.name || 'clip'}__${file.size || 0}__${file.lastModified || 0}`;
+}
+
+function makeSlot(blob, name, blobId) {
+  const slot = {
+    id: nextId(),
+    file: blob,
+    blobId: blobId || blobIdFor(blob, name),
+    url: URL.createObjectURL(blob),
+    name,
+    w: 0,
+    h: 0,
+    duration: 0,
+    ready: false,
+    videoEl: null,
+  };
+  slot.videoEl = createVideoEl(slot);
+  return slot;
+}
+
 function addFiles(fileList) {
   const files = Array.from(fileList || []).filter((f) => f.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(f.name));
   if (!files.length) return;
@@ -848,23 +984,24 @@ function addFiles(fileList) {
       window.alert(`Up to ${MAX_SLOTS} videos at a time. Remove one to add more.`);
       break;
     }
-    const slot = {
-      id: nextId(),
-      file,
-      url: URL.createObjectURL(file),
-      name: file.name,
-      w: 0,
-      h: 0,
-      duration: 0,
-      ready: false,
-      videoEl: null,
-    };
-    slot.videoEl = createVideoEl(slot);
-    S.slots.push(slot);
+    S.slots.push(makeSlot(file, file.name));
     added += 1;
   }
 
   if (added) onChange();
+}
+
+// Restore a clip from a stored blob (used by saved-comparison / session restore).
+// Reuses an already-loaded slot with the same blobId if present. Pass triggerChange=false
+// to batch several restores and fire onChange once.
+function addBlobSlot(blob, name, blobId, triggerChange = true) {
+  const existing = S.slots.find((s) => (s.blobId || blobIdFor(s.file, s.name)) === blobId);
+  if (existing) return existing;
+  if (S.slots.length >= MAX_SLOTS) return null;
+  const slot = makeSlot(blob, name, blobId);
+  S.slots.push(slot);
+  if (triggerChange) onChange();
+  return slot;
 }
 
 function removeSlot(id) {
@@ -883,7 +1020,7 @@ function removeSlot(id) {
   onChange();
 }
 
-  return { initLoaders, openPicker, addFiles, removeSlot };
+  return { initLoaders, openPicker, blobIdFor, addFiles, addBlobSlot, removeSlot };
 })();
 
 const __m_playback = (function () {
@@ -1421,6 +1558,238 @@ function exportCurrentFrame() {
   return { exportCurrentFrame };
 })();
 
+const __m_saves = (function () {
+  const { S, getSlot } = __m_state;
+  const { dom } = __m_dom;
+  const { stripExt, esc } = __m_helpers;
+  const { putBlob, getBlob, deleteBlob, listBlobIds, hasBlob, kvGet, kvSet, kvDel } = __m_storage;
+  const { addBlobSlot, blobIdFor } = __m_loaders;
+
+
+
+
+
+
+const MAX_SAVES = 12;
+let onApply = null;          // app: applies a restored comparison (sets A/B + state, shows overlay)
+let onApplySession = null;   // app: applies a restored session (slots + view + playback)
+let sessionTimer = null;
+
+function initSaves(handlers = {}) {
+  onApply = handlers.onApply || null;
+  onApplySession = handlers.onApplySession || null;
+}
+
+const slotBlobId = (slot) => slot.blobId || blobIdFor(slot.file, slot.name);
+
+async function safe(promise, fallback) {
+  try { return await promise; } catch (e) { return fallback; }
+}
+
+async function ensureBlob(slot) {
+  const id = slotBlobId(slot);
+  try { if (!(await hasBlob(id))) await putBlob(id, slot.file, slot.name); } catch (e) { /* ignore */ }
+  return id;
+}
+
+// Small gallery thumbnail of the current overlay (ignores zoom/pan/rotate for a clean frame).
+function capturePreview(size = 320) {
+  const a = getSlot(S.selA);
+  const b = getSlot(S.selB);
+  if (!a || !b) return '';
+  const W = size;
+  const H = Math.round(size * (a.w && a.h ? a.h / a.w : 9 / 16));
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0d0d0f';
+  ctx.fillRect(0, 0, W, H);
+  const draw = (v, opacity, clipFrom) => {
+    const iw = v.videoWidth;
+    const ih = v.videoHeight;
+    if (!iw || !ih) return;
+    const fit = Math.min(W / iw, H / ih);
+    const dw = iw * fit;
+    const dh = ih * fit;
+    ctx.save();
+    if (clipFrom !== null) { ctx.beginPath(); ctx.rect(W * clipFrom, 0, W * (1 - clipFrom), H); ctx.clip(); }
+    ctx.globalAlpha = opacity;
+    ctx.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    ctx.restore();
+  };
+  draw(a.videoEl, 1, null);
+  if (S.mode === 'slider') {
+    draw(b.videoEl, 1, S.pos);
+    ctx.fillStyle = '#c8f03c';
+    ctx.fillRect(W * S.pos - 1, 0, 2, H);
+  } else if (S.mode === 'dissolve') {
+    draw(b.videoEl, S.dissolve, null);
+  } else {
+    draw(b.videoEl, S.toggleFrame === 'b' ? 1 : 0, null);
+  }
+  try { return canvas.toDataURL('image/jpeg', 0.6); } catch (e) { return ''; }
+}
+
+function fmtWhen(ts) {
+  try { return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  catch (e) { return ''; }
+}
+
+// ---- saved comparisons gallery -----------------------------------------
+async function saveCurrentComparison() {
+  if (S.view !== 'overlay' || !S.selA || !S.selB) return;
+  const a = getSlot(S.selA);
+  const b = getSlot(S.selB);
+  if (!a || !b) return;
+
+  const preview = capturePreview();
+  const aId = await ensureBlob(a);
+  const bId = await ensureBlob(b);
+
+  const rec = {
+    id: `cmp-${Date.now()}-${Math.floor(Math.random() * 1e5)}`,
+    savedAt: Date.now(),
+    label: `${stripExt(a.name)}  vs  ${stripExt(b.name)}`,
+    preview,
+    a: { blobId: aId, name: a.name },
+    b: { blobId: bId, name: b.name },
+    mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
+    zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
+  };
+
+  let saves = (await safe(kvGet('saves'), [])) || [];
+  saves.unshift(rec);
+  saves = saves.slice(0, MAX_SAVES);
+  await safe(kvSet('saves', saves));
+  renderSaves(saves);
+  gcBlobs();
+}
+
+async function renderSavesFromStore() {
+  const saves = (await safe(kvGet('saves'), [])) || [];
+  renderSaves(saves);
+}
+
+function renderSaves(saves) {
+  const list = dom.savesList;
+  if (!list) return;
+  if (!saves || !saves.length) {
+    dom.savesRail.hidden = true;
+    list.innerHTML = '';
+    return;
+  }
+  dom.savesRail.hidden = false;
+  list.innerHTML = saves.map((r) => `
+    <div class="save-card" data-id="${r.id}" title="${esc(r.label)}">
+      <button class="save-open" data-open="${r.id}" type="button">
+        ${r.preview ? `<img class="save-thumb" src="${r.preview}" alt="">` : '<div class="save-thumb"></div>'}
+        <span class="save-mode">${r.mode}</span>
+      </button>
+      <button class="save-del" data-del="${r.id}" type="button" aria-label="Delete">×</button>
+      <div class="save-meta">
+        <div class="save-label">${esc(r.label)}</div>
+        <div class="save-time">${fmtWhen(r.savedAt)}</div>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('[data-open]').forEach((n) => n.addEventListener('click', () => restoreSave(n.dataset.open)));
+  list.querySelectorAll('[data-del]').forEach((n) => n.addEventListener('click', (e) => { e.stopPropagation(); deleteSave(n.dataset.del); }));
+}
+
+async function loadClipSlot(ref) {
+  let slot = S.slots.find((s) => slotBlobId(s) === ref.blobId);
+  if (slot) return slot;
+  const rec = await safe(getBlob(ref.blobId), null);
+  if (!rec) return null;
+  return addBlobSlot(rec.blob, ref.name || rec.name, ref.blobId);
+}
+
+async function restoreSave(id) {
+  const saves = (await safe(kvGet('saves'), [])) || [];
+  const rec = saves.find((r) => r.id === id);
+  if (!rec || !onApply) return;
+  const a = await loadClipSlot(rec.a);
+  const b = await loadClipSlot(rec.b);
+  if (!a || !b) { window.alert('Could not restore — the saved video data is missing.'); return; }
+  onApply(rec, a.id, b.id);
+}
+
+async function deleteSave(id) {
+  let saves = (await safe(kvGet('saves'), [])) || [];
+  saves = saves.filter((r) => r.id !== id);
+  await safe(kvSet('saves', saves));
+  renderSaves(saves);
+  gcBlobs();
+}
+
+// ---- session auto-save / restore ---------------------------------------
+function scheduleSessionSave() {
+  if (sessionTimer) clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => { saveSessionNow(); }, 700);
+}
+
+async function saveSessionNow() {
+  try {
+    if (!S.slots.length) { await safe(kvDel('session')); return; }
+    const slots = [];
+    for (const s of S.slots) {
+      const id = await ensureBlob(s);
+      slots.push({ blobId: id, name: s.name });
+    }
+    const rec = {
+      slots,
+      selA: S.selA ? S.slots.findIndex((s) => s.id === S.selA) : -1,
+      selB: S.selB ? S.slots.findIndex((s) => s.id === S.selB) : -1,
+      view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
+      zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
+      loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, curTime: S.curTime,
+    };
+    await safe(kvSet('session', rec));
+    gcBlobs();
+  } catch (e) { /* ignore */ }
+}
+
+async function restoreSession() {
+  const rec = await safe(kvGet('session'), null);
+  if (!rec || !Array.isArray(rec.slots) || !rec.slots.length || !onApplySession) return false;
+  const created = [];
+  for (const sm of rec.slots) {
+    const b = await safe(getBlob(sm.blobId), null);
+    if (!b) continue;
+    const slot = addBlobSlot(b.blob, sm.name || b.name, sm.blobId, false);
+    if (slot) created.push(slot);
+  }
+  if (!created.length) return false;
+  onApplySession(rec, created);
+  return true;
+}
+
+// Wipe all persisted data (saves, session, stored video blobs).
+async function clearAllSaved() {
+  await safe(kvDel('saves'));
+  await safe(kvDel('session'));
+  try { const ids = (await safe(listBlobIds(), [])) || []; for (const id of ids) await safe(deleteBlob(id)); } catch (e) { /* ignore */ }
+  renderSaves([]);
+}
+
+// Delete any stored blob not referenced by a save, the session, or a loaded slot.
+async function gcBlobs() {
+  try {
+    const keep = new Set();
+    const saves = (await safe(kvGet('saves'), [])) || [];
+    saves.forEach((r) => { keep.add(r.a.blobId); keep.add(r.b.blobId); });
+    const sess = await safe(kvGet('session'), null);
+    if (sess && Array.isArray(sess.slots)) sess.slots.forEach((s) => keep.add(s.blobId));
+    S.slots.forEach((s) => keep.add(slotBlobId(s)));
+    const ids = (await safe(listBlobIds(), [])) || [];
+    for (const id of ids) if (!keep.has(id)) await safe(deleteBlob(id));
+  } catch (e) { /* ignore */ }
+}
+
+  return { initSaves, saveCurrentComparison, renderSavesFromStore, scheduleSessionSave, saveSessionNow, restoreSession, clearAllSaved };
+})();
+
 const __m_app = (function () {
   const { S, getSlot, MAX_SLOTS } = __m_state;
   const { dom } = __m_dom;
@@ -1430,6 +1799,8 @@ const __m_app = (function () {
   const { renderOverlay, mountOverlay, applyAspectRatio, clearAspectRatio, renderInfoBar } = __m_viewer;
   const { exportCurrentFrame } = __m_export;
   const { stripExt } = __m_helpers;
+  const { initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow, restoreSession, renderSavesFromStore, clearAllSaved } = __m_saves;
+
 
 
 
@@ -1455,7 +1826,7 @@ function updateChrome() {
   dom.modePills.hidden = !overlay;
   dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
-  [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn]
+  [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn, dom.saveBtn]
     .forEach((b) => { b.hidden = !overlay; });
 
   // overlay pill availability
@@ -1486,6 +1857,7 @@ function showGrid() {
   syncActive();
   updateChrome();
   renderInfoBar();
+  scheduleSessionSave();
 }
 
 function showOverlay() {
@@ -1493,6 +1865,7 @@ function showOverlay() {
   S.view = 'overlay';
   dom.videoGrid.classList.remove('on');
   dom.videoGrid.innerHTML = '';   // release tiles; videos move into #comp
+  dom.comp.querySelectorAll('video').forEach((v) => v.remove());  // drop any stale overlay videos (e.g. restoring while already in overlay)
   mountOverlay();
   dom.comp.classList.add('ready');
   applyAspectRatio();
@@ -1501,6 +1874,7 @@ function showOverlay() {
   renderPickers();
   renderInfoBar();
   renderOverlay();
+  scheduleSessionSave();
 }
 
 function setView(view) {
@@ -1523,6 +1897,7 @@ function applyOverlayChange() {
   updateChrome();
   renderInfoBar();
   renderPickers();
+  scheduleSessionSave();
 }
 
 // Grid tile A/B buttons: clicking the active role toggles it off.
@@ -1582,6 +1957,53 @@ function renderPickers() {
   fill(dom.pickB, S.selB);
 }
 
+// Apply the overlay state (mode / positions / transforms) from a record onto S + UI.
+function applyViewState(rec) {
+  S.mode = rec.mode || 'slider';
+  S.pos = Number.isFinite(rec.pos) ? rec.pos : 0.5;
+  S.dissolve = Number.isFinite(rec.dissolve) ? rec.dissolve : 0.5;
+  S.toggleFrame = rec.toggleFrame || 'a';
+  S.zoom = Number.isFinite(rec.zoom) ? rec.zoom : 1;
+  S.panX = rec.panX || 0;
+  S.panY = rec.panY || 0;
+  S.rotation = rec.rotation || 0;
+  S.flipH = !!rec.flipH;
+  S.flipV = !!rec.flipV;
+  document.querySelectorAll('.mpill').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
+  dom.dRange.value = String(S.dissolve);
+  dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
+}
+
+// Restore a saved comparison: A/B already loaded as slots, set state + show overlay.
+function applyRestoredComparison(rec, aId, bId) {
+  S.selA = aId;
+  S.selB = bId;
+  applyViewState(rec);
+  showOverlay();
+}
+
+// Restore a whole session (created = freshly-made slots, in order).
+function applyRestoredSession(rec, created) {
+  S.loop = rec.loop !== false;
+  S.autoplay = rec.autoplay !== false;
+  S.muted = rec.muted !== false;
+  S.rate = Number.isFinite(rec.rate) ? rec.rate : 1;
+  S.fps = Number.isFinite(rec.fps) ? rec.fps : 30;
+  S.curTime = Number.isFinite(rec.curTime) ? rec.curTime : 0;
+  dom.rateSelect.value = String(S.rate);
+  dom.fpsInput.value = String(S.fps);
+  updateOptionButtons();
+
+  S.selA = (rec.selA >= 0 && S.slots[rec.selA]) ? S.slots[rec.selA].id : null;
+  S.selB = (rec.selB >= 0 && S.slots[rec.selB]) ? S.slots[rec.selB].id : null;
+  applyViewState(rec);
+
+  if (rec.view === 'overlay' && canOverlay()) showOverlay();
+  else showGrid();
+
+  if (S.autoplay) play();
+}
+
 function autoAssign() {
   if (!S.selA && S.slots[0]) S.selA = S.slots[0].id;
   if (!S.selB && S.slots[1] && S.slots[1].id !== S.selA) S.selB = S.slots[1].id;
@@ -1601,6 +2023,7 @@ function onSlotsChanged() {
 
   if (hasVideos() && S.autoplay && !S.playing) play();
   if (!hasVideos()) { pause(); S.curTime = 0; updateScrub(0); }
+  scheduleSessionSave();
 }
 
 function onMeta() {
@@ -1654,12 +2077,30 @@ function zoomBy(delta, clientX, clientY) {
   if (S.zoom === 1) { S.panX = 0; S.panY = 0; }
   clampPan();
   renderOverlay();
+  scheduleSessionSave();
+}
+
+// Inch the active comparison control: wipe position in Slider mode, blend in Dissolve mode.
+function nudgeActiveSlider(delta) {
+  if (S.view !== 'overlay') return;
+  if (S.mode === 'slider') {
+    S.pos = Math.max(0.001, Math.min(0.999, S.pos + delta));
+    renderOverlay();
+    scheduleSessionSave();
+  } else if (S.mode === 'dissolve') {
+    S.dissolve = Math.max(0, Math.min(1, S.dissolve + delta));
+    dom.dRange.value = String(S.dissolve);
+    dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
+    renderOverlay();
+    scheduleSessionSave();
+  }
 }
 
 function resetView() {
   S.flipH = false; S.flipV = false; S.rotation = 0;
   S.zoom = 1; S.panX = 0; S.panY = 0;
   renderOverlay();
+  scheduleSessionSave();
 }
 
 function swapAB() {
@@ -1667,7 +2108,9 @@ function swapAB() {
   [S.selA, S.selB] = [S.selB, S.selA];
   if (S.view === 'overlay') { dom.comp.querySelectorAll('video').forEach((v) => v.remove()); mountOverlay(); }
   renderInfoBar();
+  renderPickers();
   renderOverlay();
+  scheduleSessionSave();
 }
 
 function bindOverlayInteraction() {
@@ -1694,7 +2137,11 @@ function bindOverlayInteraction() {
     renderOverlay();
   });
 
-  document.addEventListener('mouseup', () => { S.dragging = false; S.panning = false; });
+  document.addEventListener('mouseup', () => {
+    const was = S.dragging || S.panning;
+    S.dragging = false; S.panning = false;
+    if (was) scheduleSessionSave();
+  });
 
   dom.stageWrap.addEventListener('touchstart', (e) => {
     if (S.view !== 'overlay') return;
@@ -1709,13 +2156,18 @@ function bindOverlayInteraction() {
     S.pos = getRelX(e); renderOverlay();
   }, { passive: true });
 
-  document.addEventListener('touchend', () => { S.dragging = false; S.panning = false; });
+  document.addEventListener('touchend', () => {
+    const was = S.dragging || S.panning;
+    S.dragging = false; S.panning = false;
+    if (was) scheduleSessionSave();
+  });
 
   // toggle-mode click
   dom.stageWrap.addEventListener('click', () => {
     if (S.view !== 'overlay' || S.mode !== 'toggle' || S.dragging) return;
     S.toggleFrame = S.toggleFrame === 'a' ? 'b' : 'a';
     renderOverlay();
+    scheduleSessionSave();
   });
 
   // wheel zoom
@@ -1733,6 +2185,7 @@ function setMode(mode) {
   if (mode === 'toggle') S.toggleFrame = 'a';
   if (S.view !== 'overlay' && canOverlay()) { showOverlay(); }
   renderOverlay();
+  scheduleSessionSave();
 }
 
 // ---------- fullscreen ---------------------------------------------------
@@ -1753,6 +2206,7 @@ function bindToolbar() {
     S.dissolve = parseFloat(dom.dRange.value);
     dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
     if (S.mode === 'dissolve') renderOverlay();
+    scheduleSessionSave();
   });
 
   dom.pickA.addEventListener('change', () => { setSide('a', dom.pickA.value); dom.pickA.blur(); });
@@ -1760,11 +2214,12 @@ function bindToolbar() {
 
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
-  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); });
-  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; renderOverlay(); });
-  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; renderOverlay(); });
+  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); scheduleSessionSave(); });
+  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; renderOverlay(); scheduleSessionSave(); });
+  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; renderOverlay(); scheduleSessionSave(); });
   dom.resetViewBtn.addEventListener('click', resetView);
   dom.exportBtn.addEventListener('click', exportCurrentFrame);
+  dom.saveBtn.addEventListener('click', () => { saveCurrentComparison(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 }
 
@@ -1780,11 +2235,11 @@ function bindTransport() {
   dom.scrub.addEventListener('change', () => { S.scrubbing = false; });
   ['mouseup', 'touchend'].forEach((ev) => dom.scrub.addEventListener(ev, () => { S.scrubbing = false; }));
 
-  dom.loopBtn.addEventListener('click', () => setLoop(!S.loop));
-  dom.autoplayBtn.addEventListener('click', () => setAutoplay(!S.autoplay));
-  dom.muteBtn.addEventListener('click', () => setMuted(!S.muted));
-  dom.rateSelect.addEventListener('change', () => setRate(parseFloat(dom.rateSelect.value)));
-  dom.fpsInput.addEventListener('change', () => { S.fps = Math.max(1, Math.min(120, parseInt(dom.fpsInput.value, 10) || 30)); });
+  dom.loopBtn.addEventListener('click', () => { setLoop(!S.loop); scheduleSessionSave(); });
+  dom.autoplayBtn.addEventListener('click', () => { setAutoplay(!S.autoplay); scheduleSessionSave(); });
+  dom.muteBtn.addEventListener('click', () => { setMuted(!S.muted); scheduleSessionSave(); });
+  dom.rateSelect.addEventListener('change', () => { setRate(parseFloat(dom.rateSelect.value)); scheduleSessionSave(); });
+  dom.fpsInput.addEventListener('change', () => { S.fps = Math.max(1, Math.min(120, parseInt(dom.fpsInput.value, 10) || 30)); scheduleSessionSave(); });
 }
 
 function bindKeyboard() {
@@ -1811,18 +2266,21 @@ function bindKeyboard() {
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e' && S.view === 'overlay') { e.preventDefault(); exportCurrentFrame(); }
+    else if (e.shiftKey && e.code === 'Comma') { e.preventDefault(); nudgeActiveSlider(e.altKey ? -0.05 : -0.01); }   // <
+    else if (e.shiftKey && e.code === 'Period') { e.preventDefault(); nudgeActiveSlider(e.altKey ? 0.05 : 0.01); }    // >
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
     else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
 }
 
 async function resetAll() {
-  if (!window.confirm('Reset everything and clear all loaded videos?')) return;
+  if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
   pause();
   S.slots.slice().forEach((s) => removeSlot(s.id));
   S.selA = null; S.selB = null; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
+  await clearAllSaved();
   showGrid();
   updateChrome();
 }
@@ -1847,9 +2305,10 @@ function bindResizeTracking() {
   }
 }
 
-function init() {
+async function init() {
   initLoaders({ onChange: onSlotsChanged, onMeta });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
+  initSaves({ onApply: applyRestoredComparison, onApplySession: applyRestoredSession });
   bindToolbar();
   bindTransport();
   bindOverlayInteraction();
@@ -1858,12 +2317,20 @@ function init() {
   bindResizeTracking();
   dom.headerResetBtn.addEventListener('click', resetAll);
 
+  // flush the session before the tab is hidden/closed (debounce may not have fired)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSessionNow(); });
+  window.addEventListener('pagehide', () => { saveSessionNow(); });
+
   // initial UI state
   dom.fpsInput.value = String(S.fps);
   dom.rateSelect.value = String(S.rate);
   updateOptionButtons();
   updatePlayButton();
   updateChrome();
+
+  // restore the last workspace (if any), then render the saved-comparisons gallery
+  try { await restoreSession(); } catch (e) { /* ignore */ }
+  try { await renderSavesFromStore(); } catch (e) { /* ignore */ }
 }
 
 init();

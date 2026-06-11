@@ -18,7 +18,7 @@ SRC = ROOT / "src"
 JS = SRC / "js"
 
 # dependency order: leaves first, app last (each module's __m_<name> must exist before use)
-MODULE_ORDER = ["helpers", "state", "dom", "loaders", "playback", "viewer", "grid", "export", "app"]
+MODULE_ORDER = ["helpers", "state", "dom", "storage", "loaders", "playback", "viewer", "grid", "export", "saves", "app"]
 
 IMPORT_RE = re.compile(r"""import\s*\{([^}]*)\}\s*from\s*['"]\./([\w.]+)\.js['"];?""", re.DOTALL)
 EXPORT_DECL_RE = re.compile(r"""^export\s+(async\s+function|function|const|let|class)\s+(\w+)""", re.MULTILINE)

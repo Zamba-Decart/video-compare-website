@@ -450,6 +450,59 @@ header {
   color: var(--muted); margin: 0 4px 0 10px;
 }
 
+/* ===== Saved comparisons rail ===== */
+.saves-rail {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.saves-head {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--acc);
+}
+.saves-head span { color: var(--muted); letter-spacing: 0.04em; text-transform: none; }
+.saves-list {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
+}
+.save-card {
+  position: relative; flex: 0 0 auto;
+  width: 150px;
+  border: 1px solid var(--border);
+  border-radius: 10px; background: var(--surf2);
+  overflow: hidden;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.save-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+.save-open {
+  display: block; width: 100%; padding: 0; border: 0; cursor: pointer;
+  background: #0a0a0c; position: relative;
+}
+.save-thumb { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #0a0a0c; }
+.save-mode {
+  position: absolute; bottom: 6px; left: 6px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  background: rgba(0,0,0,0.7); color: var(--acc);
+  padding: 2px 7px; border-radius: 999px;
+}
+.save-del {
+  position: absolute; top: 6px; right: 6px;
+  width: 22px; height: 22px; border-radius: 999px; line-height: 1; font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.55); color: #fff; cursor: pointer;
+}
+.save-del:hover { background: rgba(239,68,68,0.9); border-color: rgba(239,68,68,0.9); }
+.save-meta { padding: 7px 9px; display: flex; flex-direction: column; gap: 2px; }
+.save-label {
+  font-size: 11px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.save-time { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+body.is-fullscreen .saves-rail { display: none; }
+
 /* ===== Fullscreen ===== */
 body.is-fullscreen header,
 body.is-fullscreen .dropzone,
