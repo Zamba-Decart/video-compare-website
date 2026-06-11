@@ -13,9 +13,11 @@ import {
 import { exportCurrentFrame } from './export.js';
 import { stripExt } from './helpers.js';
 import {
-  initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow,
+  initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow, cancelSessionSave,
   restoreSession, renderSavesFromStore, clearAllSaved,
 } from './saves.js';
+
+let restoreSeekTime = null;   // one-shot: seek to a restored session's saved time once metadata loads
 
 const hasVideos = () => S.slots.length > 0;
 const canOverlay = () => S.selA && S.selB && S.selA !== S.selB;
@@ -201,13 +203,21 @@ function applyRestoredSession(rec, created) {
   dom.fpsInput.value = String(S.fps);
   updateOptionButtons();
 
-  S.selA = (rec.selA >= 0 && S.slots[rec.selA]) ? S.slots[rec.selA].id : null;
-  S.selB = (rec.selB >= 0 && S.slots[rec.selB]) ? S.slots[rec.selB].id : null;
+  // Resolve A/B by content id (robust to skipped/deduped slots); tolerate legacy index records.
+  const resolveSel = (ref) => {
+    if (ref == null || ref === -1) return null;
+    if (typeof ref === 'number') return S.slots[ref] ? S.slots[ref].id : null;
+    const slot = S.slots.find((s) => s.blobId === ref);
+    return slot ? slot.id : null;
+  };
+  S.selA = resolveSel(rec.selA);
+  S.selB = resolveSel(rec.selB);
   applyViewState(rec);
 
   if (rec.view === 'overlay' && canOverlay()) showOverlay();
   else showGrid();
 
+  restoreSeekTime = (Number.isFinite(rec.curTime) && rec.curTime > 0.05) ? rec.curTime : null;
   if (S.autoplay) play();
 }
 
@@ -239,6 +249,12 @@ function onMeta() {
   updateDurationDisplay();
   renderInfoBar();
   renderPickers();
+  // re-apply a restored session's playback position once we actually know durations
+  if (restoreSeekTime != null && S.duration > 0) {
+    const t = restoreSeekTime;
+    restoreSeekTime = null;
+    seek(t);
+  }
   if (S.autoplay && !S.playing && hasVideos()) play();
 }
 
@@ -473,8 +489,8 @@ function bindKeyboard() {
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e' && S.view === 'overlay') { e.preventDefault(); exportCurrentFrame(); }
-    else if (e.shiftKey && e.code === 'Comma') { e.preventDefault(); nudgeActiveSlider(e.altKey ? -0.05 : -0.01); }   // <
-    else if (e.shiftKey && e.code === 'Period') { e.preventDefault(); nudgeActiveSlider(e.altKey ? 0.05 : 0.01); }    // >
+    else if (e.key === '<') { e.preventDefault(); nudgeActiveSlider(e.altKey ? -0.05 : -0.01); }   // matches the glyph across keyboard layouts
+    else if (e.key === '>') { e.preventDefault(); nudgeActiveSlider(e.altKey ? 0.05 : 0.01); }
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
     else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
@@ -482,6 +498,7 @@ function bindKeyboard() {
 
 async function resetAll() {
   if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
+  cancelSessionSave();   // stop any pending debounce from resurrecting state after the wipe
   pause();
   S.slots.slice().forEach((s) => removeSlot(s.id));
   S.selA = null; S.selB = null; S.view = 'grid';

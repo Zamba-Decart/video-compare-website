@@ -2,12 +2,21 @@ import { S, getSlot } from './state.js';
 import { dom } from './dom.js';
 import { stripExt, esc } from './helpers.js';
 import { putBlob, getBlob, deleteBlob, listBlobIds, hasBlob, kvGet, kvSet, kvDel } from './storage.js';
-import { addBlobSlot, blobIdFor } from './loaders.js';
+import { addBlobSlot, blobIdFor, removeSlot } from './loaders.js';
 
 const MAX_SAVES = 12;
 let onApply = null;          // app: applies a restored comparison (sets A/B + state, shows overlay)
 let onApplySession = null;   // app: applies a restored session (slots + view + playback)
 let sessionTimer = null;
+let wipeGen = 0;             // bumped by clearAllSaved; saveSessionNow bails if it changed mid-flight
+let savesChain = Promise.resolve();   // serializes read-modify-write on kv['saves']
+
+// Serialize kv['saves'] mutations so rapid save/delete clicks can't lost-update each other.
+function lockSaves(fn) {
+  const run = savesChain.then(fn, fn);
+  savesChain = run.then(() => {}, () => {});
+  return run;
+}
 
 export function initSaves(handlers = {}) {
   onApply = handlers.onApply || null;
@@ -20,10 +29,16 @@ async function safe(promise, fallback) {
   try { return await promise; } catch (e) { return fallback; }
 }
 
+// Returns the blob id, or null if the blob could not be stored (quota / no storage),
+// so callers never persist a record that references a non-existent blob.
 async function ensureBlob(slot) {
   const id = slotBlobId(slot);
-  try { if (!(await hasBlob(id))) await putBlob(id, slot.file, slot.name); } catch (e) { /* ignore */ }
-  return id;
+  try {
+    if (!(await hasBlob(id))) await putBlob(id, slot.file, slot.name);
+    return id;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Small gallery thumbnail of the current overlay (ignores zoom/pan/rotate for a clean frame).
@@ -80,6 +95,10 @@ export async function saveCurrentComparison() {
   const preview = capturePreview();
   const aId = await ensureBlob(a);
   const bId = await ensureBlob(b);
+  if (!aId || !bId) {
+    window.alert('Couldn’t save — browser storage is unavailable or full.');
+    return;
+  }
 
   const rec = {
     id: `cmp-${Date.now()}-${Math.floor(Math.random() * 1e5)}`,
@@ -92,11 +111,13 @@ export async function saveCurrentComparison() {
     zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
   };
 
-  let saves = (await safe(kvGet('saves'), [])) || [];
-  saves.unshift(rec);
-  saves = saves.slice(0, MAX_SAVES);
-  await safe(kvSet('saves', saves));
-  renderSaves(saves);
+  await lockSaves(async () => {
+    let saves = (await safe(kvGet('saves'), [])) || [];
+    saves.unshift(rec);
+    saves = saves.slice(0, MAX_SAVES);
+    await safe(kvSet('saves', saves));
+    renderSaves(saves);
+  });
   gcBlobs();
 }
 
@@ -131,12 +152,14 @@ function renderSaves(saves) {
   list.querySelectorAll('[data-del]').forEach((n) => n.addEventListener('click', (e) => { e.stopPropagation(); deleteSave(n.dataset.del); }));
 }
 
+// Returns { slot, created } so a failed restore can roll back slots it just made.
 async function loadClipSlot(ref) {
-  let slot = S.slots.find((s) => slotBlobId(s) === ref.blobId);
-  if (slot) return slot;
+  const existing = S.slots.find((s) => slotBlobId(s) === ref.blobId);
+  if (existing) return { slot: existing, created: false };
   const rec = await safe(getBlob(ref.blobId), null);
-  if (!rec) return null;
-  return addBlobSlot(rec.blob, ref.name || rec.name, ref.blobId);
+  if (!rec) return { slot: null, created: false };
+  const made = addBlobSlot(rec.blob, ref.name || rec.name, ref.blobId, false);  // don't fire onChange; onApply renders
+  return { slot: made, created: !!made };
 }
 
 async function restoreSave(id) {
@@ -145,15 +168,22 @@ async function restoreSave(id) {
   if (!rec || !onApply) return;
   const a = await loadClipSlot(rec.a);
   const b = await loadClipSlot(rec.b);
-  if (!a || !b) { window.alert('Could not restore — the saved video data is missing.'); return; }
-  onApply(rec, a.id, b.id);
+  if (!a.slot || !b.slot) {
+    // roll back any slot we freshly created (avoid orphan slot + leaked object URL)
+    [a, b].forEach((r) => { if (r.created && r.slot) removeSlot(r.slot.id); });
+    window.alert('Could not restore — the saved video data is missing.');
+    return;
+  }
+  onApply(rec, a.slot.id, b.slot.id);
 }
 
 async function deleteSave(id) {
-  let saves = (await safe(kvGet('saves'), [])) || [];
-  saves = saves.filter((r) => r.id !== id);
-  await safe(kvSet('saves', saves));
-  renderSaves(saves);
+  await lockSaves(async () => {
+    let saves = (await safe(kvGet('saves'), [])) || [];
+    saves = saves.filter((r) => r.id !== id);
+    await safe(kvSet('saves', saves));
+    renderSaves(saves);
+  });
   gcBlobs();
 }
 
@@ -163,22 +193,32 @@ export function scheduleSessionSave() {
   sessionTimer = setTimeout(() => { saveSessionNow(); }, 700);
 }
 
+export function cancelSessionSave() {
+  if (sessionTimer) clearTimeout(sessionTimer);
+  sessionTimer = null;
+}
+
 export async function saveSessionNow() {
+  const gen = wipeGen;
   try {
     if (!S.slots.length) { await safe(kvDel('session')); return; }
+    const aSlot = getSlot(S.selA);
+    const bSlot = getSlot(S.selB);
     const slots = [];
     for (const s of S.slots) {
+      if (gen !== wipeGen) return;          // a reset happened mid-flight — don't resurrect
       const id = await ensureBlob(s);
-      slots.push({ blobId: id, name: s.name });
+      if (id) slots.push({ blobId: id, name: s.name });
     }
     const rec = {
       slots,
-      selA: S.selA ? S.slots.findIndex((s) => s.id === S.selA) : -1,
-      selB: S.selB ? S.slots.findIndex((s) => s.id === S.selB) : -1,
+      selA: aSlot ? slotBlobId(aSlot) : null,   // by content id, robust to skipped/deduped slots on restore
+      selB: bSlot ? slotBlobId(bSlot) : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
       loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, curTime: S.curTime,
     };
+    if (gen !== wipeGen) return;
     await safe(kvSet('session', rec));
     gcBlobs();
   } catch (e) { /* ignore */ }
@@ -201,6 +241,8 @@ export async function restoreSession() {
 
 // Wipe all persisted data (saves, session, stored video blobs).
 export async function clearAllSaved() {
+  wipeGen += 1;   // invalidate any in-flight saveSessionNow so it can't resurrect cleared data
+  cancelSessionSave();
   await safe(kvDel('saves'));
   await safe(kvDel('session'));
   try { const ids = (await safe(listBlobIds(), [])) || []; for (const id of ids) await safe(deleteBlob(id)); } catch (e) { /* ignore */ }
