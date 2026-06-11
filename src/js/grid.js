@@ -8,6 +8,24 @@ export function initGrid(h = {}) {
   handlers = h; // { onSelect(role, id), onRemove(id) }
 }
 
+// Grid videos show the FULL frame: rotate/flip are honored (orientation), but zoom/pan
+// and the slider/dissolve clip+opacity (overlay-only comparison effects) are not.
+function gridTransform() {
+  return `rotate(${S.rotation}deg) scale(${S.flipH ? -1 : 1}, ${S.flipV ? -1 : 1})`;
+}
+
+export function applyGridTransforms() {
+  const tf = gridTransform();
+  S.slots.forEach((slot) => {
+    const v = slot.videoEl;
+    if (!v) return;
+    v.style.transform = tf;
+    v.style.transformOrigin = 'center center';
+    v.style.clipPath = 'none';
+    v.style.opacity = '1';
+  });
+}
+
 export function renderGrid() {
   const grid = dom.videoGrid;
   grid.innerHTML = '';
@@ -19,13 +37,13 @@ export function renderGrid() {
     if (S.selA === slot.id) tile.classList.add('sel-a');
     if (S.selB === slot.id) tile.classList.add('sel-b');
 
-    // the (re-parented) video element — clear any overlay styling (clip/opacity/transform)
-    // so the grid always shows the full, untouched original frame.
+    // the (re-parented) video element — drop the overlay's clip/opacity (comparison effects)
+    // but keep rotate/flip so the grid reflects the current orientation.
     const v = slot.videoEl;
-    v.style.transform = 'none';
-    v.style.transformOrigin = '';
     v.style.clipPath = 'none';
     v.style.opacity = '1';
+    v.style.transform = gridTransform();
+    v.style.transformOrigin = 'center center';
     tile.appendChild(v);
 
     // caption bar

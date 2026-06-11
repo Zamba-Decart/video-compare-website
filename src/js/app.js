@@ -1,7 +1,7 @@
 import { S, getSlot, MAX_SLOTS } from './state.js';
 import { dom } from './dom.js';
 import { initLoaders, openPicker, removeSlot, addFiles } from './loaders.js';
-import { initGrid, renderGrid } from './grid.js';
+import { initGrid, renderGrid, applyGridTransforms } from './grid.js';
 import {
   play, pause, togglePlay, seek, seekFraction, frameStep,
   setMuted, setLoop, setAutoplay, setRate, syncActive,
@@ -10,7 +10,7 @@ import {
 import {
   renderOverlay, mountOverlay, applyAspectRatio, clearAspectRatio, renderInfoBar,
 } from './viewer.js';
-import { exportCurrentFrame } from './export.js';
+import { exportCurrentFrame, exportGridFrame } from './export.js';
 import { stripExt } from './helpers.js';
 import {
   initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow, cancelSessionSave,
@@ -35,8 +35,10 @@ function updateChrome() {
   dom.modePills.hidden = !overlay;
   dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
-  [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn, dom.saveBtn]
-    .forEach((b) => { b.hidden = !overlay; });
+  // overlay-only tools
+  [dom.swapBtn, dom.resetViewBtn].forEach((b) => { b.hidden = !overlay; });
+  // available in BOTH grid and overlay (whenever videos are loaded)
+  [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
 
   // overlay pill availability
   dom.viewOverlayBtn.style.opacity = canOverlay() ? '1' : '0.4';
@@ -304,14 +306,17 @@ function zoomBy(delta, clientX, clientY) {
 }
 
 // Inch the active comparison control: wipe position in Slider mode, blend in Dissolve mode.
-function nudgeActiveSlider(delta) {
+// Dissolve moves faster than the slider (the wipe wants fine alignment; the blend doesn't).
+function nudgeActiveSlider(dir, big) {
   if (S.view !== 'overlay') return;
   if (S.mode === 'slider') {
-    S.pos = Math.max(0.001, Math.min(0.999, S.pos + delta));
+    const step = big ? 0.05 : 0.01;
+    S.pos = Math.max(0.001, Math.min(0.999, S.pos + dir * step));
     renderOverlay();
     scheduleSessionSave();
   } else if (S.mode === 'dissolve') {
-    S.dissolve = Math.max(0, Math.min(1, S.dissolve + delta));
+    const step = big ? 0.20 : 0.08;
+    S.dissolve = Math.max(0, Math.min(1, S.dissolve + dir * step));
     dom.dRange.value = String(S.dissolve);
     dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
     renderOverlay();
@@ -319,11 +324,29 @@ function nudgeActiveSlider(delta) {
   }
 }
 
+// Flip/rotate are view transforms that apply in BOTH grid and overlay; render the active view.
+function applyTransformButtons() {
+  dom.flipHBtn.classList.toggle('is-on', S.flipH);
+  dom.flipVBtn.classList.toggle('is-on', S.flipV);
+  dom.rotateBtn.classList.toggle('is-on', S.rotation % 360 !== 0);
+}
+
+function afterTransformChange() {
+  if (S.view === 'overlay') renderOverlay();   // applies full transform (incl. zoom/pan) + button states
+  else applyGridTransforms();                   // grid: rotate/flip only (no zoom/pan, no clip/opacity)
+  applyTransformButtons();
+  scheduleSessionSave();
+}
+
+function exportCurrentView() {
+  if (S.view === 'overlay') exportCurrentFrame();
+  else exportGridFrame();
+}
+
 function resetView() {
   S.flipH = false; S.flipV = false; S.rotation = 0;
   S.zoom = 1; S.panX = 0; S.panY = 0;
-  renderOverlay();
-  scheduleSessionSave();
+  afterTransformChange();
 }
 
 function swapAB() {
@@ -437,12 +460,12 @@ function bindToolbar() {
 
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
-  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); scheduleSessionSave(); });
-  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; renderOverlay(); scheduleSessionSave(); });
-  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; renderOverlay(); scheduleSessionSave(); });
+  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; afterTransformChange(); });
+  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; afterTransformChange(); });
+  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; afterTransformChange(); });
   dom.resetViewBtn.addEventListener('click', resetView);
-  dom.exportBtn.addEventListener('click', exportCurrentFrame);
-  dom.saveBtn.addEventListener('click', () => { saveCurrentComparison(); });
+  dom.exportBtn.addEventListener('click', exportCurrentView);
+  dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 }
 
@@ -488,25 +511,30 @@ function bindKeyboard() {
     else if (k === 'l') { e.preventDefault(); setLoop(!S.loop); }
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
-    else if (k === 'e' && S.view === 'overlay') { e.preventDefault(); exportCurrentFrame(); }
-    else if (e.key === '<') { e.preventDefault(); nudgeActiveSlider(e.altKey ? -0.05 : -0.01); }   // matches the glyph across keyboard layouts
-    else if (e.key === '>') { e.preventDefault(); nudgeActiveSlider(e.altKey ? 0.05 : 0.01); }
+    else if (k === 'e') { e.preventDefault(); exportCurrentView(); }
+    else if (e.key === '<') { e.preventDefault(); nudgeActiveSlider(-1, e.altKey); }   // matches the glyph across keyboard layouts
+    else if (e.key === '>') { e.preventDefault(); nudgeActiveSlider(1, e.altKey); }
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
     else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
 }
 
-async function resetAll() {
-  if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
-  cancelSessionSave();   // stop any pending debounce from resurrecting state after the wipe
+// Unload all videos + reset view to the empty dropzone (keeps saved comparisons).
+function clearWorkspace() {
   pause();
   S.slots.slice().forEach((s) => removeSlot(s.id));
   S.selA = null; S.selB = null; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
-  await clearAllSaved();
   showGrid();
   updateChrome();
+}
+
+async function resetAll() {
+  if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
+  cancelSessionSave();   // stop any pending debounce from resurrecting state after the wipe
+  await clearAllSaved();
+  clearWorkspace();
 }
 
 function bindFullscreenTracking() {

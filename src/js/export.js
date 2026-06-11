@@ -77,15 +77,70 @@ export function exportCurrentFrame() {
     drawTransformed(ctx, b.videoEl, w, h, panScale, S.toggleFrame === 'b' ? 1 : 0, null);
   }
 
+  downloadCanvas(canvas, `${stripExt(a.name)}__vs__${stripExt(b.name)}_${S.mode}.png`);
+}
+
+function downloadCanvas(canvas, name) {
   canvas.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${stripExt(a.name)}__vs__${stripExt(b.name)}_${S.mode}.png`;
+    link.download = name;
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, 'image/png');
+}
+
+// Screenshot the spread/grid view: every loaded clip's current frame in the same adaptive
+// layout as the grid (1×N, or 2×2 for four), with rotate/flip honored, clipped per cell.
+export function exportGridFrame() {
+  const slots = S.slots.filter((s) => s.videoEl && s.videoEl.videoWidth);
+  if (!slots.length) return;
+  const n = slots.length;
+  let cols;
+  let rows;
+  if (n === 1) { cols = 1; rows = 1; } else if (n === 2) { cols = 2; rows = 1; } else if (n === 3) { cols = 3; rows = 1; } else { cols = 2; rows = 2; }
+
+  const cellW = 640;
+  const cellH = 360;
+  const gap = 8;
+  const pad = 8;
+  const W = pad * 2 + cols * cellW + (cols - 1) * gap;
+  const H = pad * 2 + rows * cellH + (rows - 1) * gap;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0d0d0f';
+  ctx.fillRect(0, 0, W, H);
+
+  const rot = (((S.rotation % 360) + 360) % 360) * Math.PI / 180;
+  slots.forEach((s, i) => {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const x = pad + c * (cellW + gap);
+    const y = pad + r * (cellH + gap);
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fillRect(x, y, cellW, cellH);
+
+    const v = s.videoEl;
+    const fit = Math.min(cellW / v.videoWidth, cellH / v.videoHeight);   // object-fit: contain to the cell
+    const dw = v.videoWidth * fit;
+    const dh = v.videoHeight * fit;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, cellW, cellH);   // clip rotated overflow like the tile's overflow:hidden
+    ctx.clip();
+    ctx.translate(x + cellW / 2, y + cellH / 2);
+    ctx.rotate(rot);
+    ctx.scale(S.flipH ? -1 : 1, S.flipV ? -1 : 1);
+    ctx.drawImage(v, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+  });
+
+  downloadCanvas(canvas, `video-grid_${n}-up.png`);
 }

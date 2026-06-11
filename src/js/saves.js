@@ -86,18 +86,21 @@ function fmtWhen(ts) {
 }
 
 // ---- saved comparisons gallery -----------------------------------------
+// Returns true if a comparison was saved. Works from grid or overlay (needs A and B set).
 export async function saveCurrentComparison() {
-  if (S.view !== 'overlay' || !S.selA || !S.selB) return;
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
-  if (!a || !b) return;
+  if (!a || !b || S.selA === S.selB) {
+    window.alert('Pick two clips (assign A and B) to save a comparison.');
+    return false;
+  }
 
   const preview = capturePreview();
   const aId = await ensureBlob(a);
   const bId = await ensureBlob(b);
   if (!aId || !bId) {
     window.alert('Couldn’t save — browser storage is unavailable or full.');
-    return;
+    return false;
   }
 
   const rec = {
@@ -119,6 +122,7 @@ export async function saveCurrentComparison() {
     renderSaves(saves);
   });
   gcBlobs();
+  return true;
 }
 
 export async function renderSavesFromStore() {

@@ -594,7 +594,7 @@ body.is-fullscreen .stage-wrap {
       <button class="tool-btn" id="flip-v-btn" hidden>⇵ Flip V</button>
       <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
-      <button class="tool-btn" id="export-btn" hidden>⇩ Frame PNG</button>
+      <button class="tool-btn" id="export-btn" hidden>⇩ Screenshot</button>
       <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
     </div>
@@ -662,6 +662,7 @@ body.is-fullscreen .stage-wrap {
       <span class="kbd">, .</span>frame
       <span class="kbd">S D T</span>modes
       <span class="kbd">← →</span>scrub
+      <span class="kbd">&lt; &gt;</span>nudge
       <span class="kbd">[ ]</span>cycle B
       <span class="kbd">⇧[ ]</span>cycle A
       <span class="kbd">wheel</span>zoom
@@ -1398,6 +1399,24 @@ function initGrid(h = {}) {
   handlers = h; // { onSelect(role, id), onRemove(id) }
 }
 
+// Grid videos show the FULL frame: rotate/flip are honored (orientation), but zoom/pan
+// and the slider/dissolve clip+opacity (overlay-only comparison effects) are not.
+function gridTransform() {
+  return `rotate(${S.rotation}deg) scale(${S.flipH ? -1 : 1}, ${S.flipV ? -1 : 1})`;
+}
+
+function applyGridTransforms() {
+  const tf = gridTransform();
+  S.slots.forEach((slot) => {
+    const v = slot.videoEl;
+    if (!v) return;
+    v.style.transform = tf;
+    v.style.transformOrigin = 'center center';
+    v.style.clipPath = 'none';
+    v.style.opacity = '1';
+  });
+}
+
 function renderGrid() {
   const grid = dom.videoGrid;
   grid.innerHTML = '';
@@ -1409,13 +1428,13 @@ function renderGrid() {
     if (S.selA === slot.id) tile.classList.add('sel-a');
     if (S.selB === slot.id) tile.classList.add('sel-b');
 
-    // the (re-parented) video element — clear any overlay styling (clip/opacity/transform)
-    // so the grid always shows the full, untouched original frame.
+    // the (re-parented) video element — drop the overlay's clip/opacity (comparison effects)
+    // but keep rotate/flip so the grid reflects the current orientation.
     const v = slot.videoEl;
-    v.style.transform = 'none';
-    v.style.transformOrigin = '';
     v.style.clipPath = 'none';
     v.style.opacity = '1';
+    v.style.transform = gridTransform();
+    v.style.transformOrigin = 'center center';
     tile.appendChild(v);
 
     // caption bar
@@ -1456,7 +1475,7 @@ function renderGrid() {
   });
 }
 
-  return { initGrid, renderGrid };
+  return { initGrid, applyGridTransforms, renderGrid };
 })();
 
 const __m_export = (function () {
@@ -1542,12 +1561,16 @@ function exportCurrentFrame() {
     drawTransformed(ctx, b.videoEl, w, h, panScale, S.toggleFrame === 'b' ? 1 : 0, null);
   }
 
+  downloadCanvas(canvas, `${stripExt(a.name)}__vs__${stripExt(b.name)}_${S.mode}.png`);
+}
+
+function downloadCanvas(canvas, name) {
   canvas.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${stripExt(a.name)}__vs__${stripExt(b.name)}_${S.mode}.png`;
+    link.download = name;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1555,7 +1578,58 @@ function exportCurrentFrame() {
   }, 'image/png');
 }
 
-  return { exportCurrentFrame };
+// Screenshot the spread/grid view: every loaded clip's current frame in the same adaptive
+// layout as the grid (1×N, or 2×2 for four), with rotate/flip honored, clipped per cell.
+function exportGridFrame() {
+  const slots = S.slots.filter((s) => s.videoEl && s.videoEl.videoWidth);
+  if (!slots.length) return;
+  const n = slots.length;
+  let cols;
+  let rows;
+  if (n === 1) { cols = 1; rows = 1; } else if (n === 2) { cols = 2; rows = 1; } else if (n === 3) { cols = 3; rows = 1; } else { cols = 2; rows = 2; }
+
+  const cellW = 640;
+  const cellH = 360;
+  const gap = 8;
+  const pad = 8;
+  const W = pad * 2 + cols * cellW + (cols - 1) * gap;
+  const H = pad * 2 + rows * cellH + (rows - 1) * gap;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0d0d0f';
+  ctx.fillRect(0, 0, W, H);
+
+  const rot = (((S.rotation % 360) + 360) % 360) * Math.PI / 180;
+  slots.forEach((s, i) => {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const x = pad + c * (cellW + gap);
+    const y = pad + r * (cellH + gap);
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fillRect(x, y, cellW, cellH);
+
+    const v = s.videoEl;
+    const fit = Math.min(cellW / v.videoWidth, cellH / v.videoHeight);   // object-fit: contain to the cell
+    const dw = v.videoWidth * fit;
+    const dh = v.videoHeight * fit;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, cellW, cellH);   // clip rotated overflow like the tile's overflow:hidden
+    ctx.clip();
+    ctx.translate(x + cellW / 2, y + cellH / 2);
+    ctx.rotate(rot);
+    ctx.scale(S.flipH ? -1 : 1, S.flipV ? -1 : 1);
+    ctx.drawImage(v, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+  });
+
+  downloadCanvas(canvas, `video-grid_${n}-up.png`);
+}
+
+  return { exportCurrentFrame, exportGridFrame };
 })();
 
 const __m_saves = (function () {
@@ -1652,18 +1726,21 @@ function fmtWhen(ts) {
 }
 
 // ---- saved comparisons gallery -----------------------------------------
+// Returns true if a comparison was saved. Works from grid or overlay (needs A and B set).
 async function saveCurrentComparison() {
-  if (S.view !== 'overlay' || !S.selA || !S.selB) return;
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
-  if (!a || !b) return;
+  if (!a || !b || S.selA === S.selB) {
+    window.alert('Pick two clips (assign A and B) to save a comparison.');
+    return false;
+  }
 
   const preview = capturePreview();
   const aId = await ensureBlob(a);
   const bId = await ensureBlob(b);
   if (!aId || !bId) {
     window.alert('Couldn’t save — browser storage is unavailable or full.');
-    return;
+    return false;
   }
 
   const rec = {
@@ -1685,6 +1762,7 @@ async function saveCurrentComparison() {
     renderSaves(saves);
   });
   gcBlobs();
+  return true;
 }
 
 async function renderSavesFromStore() {
@@ -1836,10 +1914,10 @@ const __m_app = (function () {
   const { S, getSlot, MAX_SLOTS } = __m_state;
   const { dom } = __m_dom;
   const { initLoaders, openPicker, removeSlot, addFiles } = __m_loaders;
-  const { initGrid, renderGrid } = __m_grid;
+  const { initGrid, renderGrid, applyGridTransforms } = __m_grid;
   const { play, pause, togglePlay, seek, seekFraction, frameStep, setMuted, setLoop, setAutoplay, setRate, syncActive, computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton } = __m_playback;
   const { renderOverlay, mountOverlay, applyAspectRatio, clearAspectRatio, renderInfoBar } = __m_viewer;
-  const { exportCurrentFrame } = __m_export;
+  const { exportCurrentFrame, exportGridFrame } = __m_export;
   const { stripExt } = __m_helpers;
   const { initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow, cancelSessionSave, restoreSession, renderSavesFromStore, clearAllSaved } = __m_saves;
 
@@ -1870,8 +1948,10 @@ function updateChrome() {
   dom.modePills.hidden = !overlay;
   dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
-  [dom.swapBtn, dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.resetViewBtn, dom.exportBtn, dom.saveBtn]
-    .forEach((b) => { b.hidden = !overlay; });
+  // overlay-only tools
+  [dom.swapBtn, dom.resetViewBtn].forEach((b) => { b.hidden = !overlay; });
+  // available in BOTH grid and overlay (whenever videos are loaded)
+  [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
 
   // overlay pill availability
   dom.viewOverlayBtn.style.opacity = canOverlay() ? '1' : '0.4';
@@ -2139,14 +2219,17 @@ function zoomBy(delta, clientX, clientY) {
 }
 
 // Inch the active comparison control: wipe position in Slider mode, blend in Dissolve mode.
-function nudgeActiveSlider(delta) {
+// Dissolve moves faster than the slider (the wipe wants fine alignment; the blend doesn't).
+function nudgeActiveSlider(dir, big) {
   if (S.view !== 'overlay') return;
   if (S.mode === 'slider') {
-    S.pos = Math.max(0.001, Math.min(0.999, S.pos + delta));
+    const step = big ? 0.05 : 0.01;
+    S.pos = Math.max(0.001, Math.min(0.999, S.pos + dir * step));
     renderOverlay();
     scheduleSessionSave();
   } else if (S.mode === 'dissolve') {
-    S.dissolve = Math.max(0, Math.min(1, S.dissolve + delta));
+    const step = big ? 0.20 : 0.08;
+    S.dissolve = Math.max(0, Math.min(1, S.dissolve + dir * step));
     dom.dRange.value = String(S.dissolve);
     dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
     renderOverlay();
@@ -2154,11 +2237,29 @@ function nudgeActiveSlider(delta) {
   }
 }
 
+// Flip/rotate are view transforms that apply in BOTH grid and overlay; render the active view.
+function applyTransformButtons() {
+  dom.flipHBtn.classList.toggle('is-on', S.flipH);
+  dom.flipVBtn.classList.toggle('is-on', S.flipV);
+  dom.rotateBtn.classList.toggle('is-on', S.rotation % 360 !== 0);
+}
+
+function afterTransformChange() {
+  if (S.view === 'overlay') renderOverlay();   // applies full transform (incl. zoom/pan) + button states
+  else applyGridTransforms();                   // grid: rotate/flip only (no zoom/pan, no clip/opacity)
+  applyTransformButtons();
+  scheduleSessionSave();
+}
+
+function exportCurrentView() {
+  if (S.view === 'overlay') exportCurrentFrame();
+  else exportGridFrame();
+}
+
 function resetView() {
   S.flipH = false; S.flipV = false; S.rotation = 0;
   S.zoom = 1; S.panX = 0; S.panY = 0;
-  renderOverlay();
-  scheduleSessionSave();
+  afterTransformChange();
 }
 
 function swapAB() {
@@ -2272,12 +2373,12 @@ function bindToolbar() {
 
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
-  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; renderOverlay(); scheduleSessionSave(); });
-  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; renderOverlay(); scheduleSessionSave(); });
-  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; renderOverlay(); scheduleSessionSave(); });
+  dom.flipHBtn.addEventListener('click', () => { S.flipH = !S.flipH; afterTransformChange(); });
+  dom.flipVBtn.addEventListener('click', () => { S.flipV = !S.flipV; afterTransformChange(); });
+  dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; afterTransformChange(); });
   dom.resetViewBtn.addEventListener('click', resetView);
-  dom.exportBtn.addEventListener('click', exportCurrentFrame);
-  dom.saveBtn.addEventListener('click', () => { saveCurrentComparison(); });
+  dom.exportBtn.addEventListener('click', exportCurrentView);
+  dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 }
 
@@ -2323,25 +2424,30 @@ function bindKeyboard() {
     else if (k === 'l') { e.preventDefault(); setLoop(!S.loop); }
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
-    else if (k === 'e' && S.view === 'overlay') { e.preventDefault(); exportCurrentFrame(); }
-    else if (e.key === '<') { e.preventDefault(); nudgeActiveSlider(e.altKey ? -0.05 : -0.01); }   // matches the glyph across keyboard layouts
-    else if (e.key === '>') { e.preventDefault(); nudgeActiveSlider(e.altKey ? 0.05 : 0.01); }
+    else if (k === 'e') { e.preventDefault(); exportCurrentView(); }
+    else if (e.key === '<') { e.preventDefault(); nudgeActiveSlider(-1, e.altKey); }   // matches the glyph across keyboard layouts
+    else if (e.key === '>') { e.preventDefault(); nudgeActiveSlider(1, e.altKey); }
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
     else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
 }
 
-async function resetAll() {
-  if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
-  cancelSessionSave();   // stop any pending debounce from resurrecting state after the wipe
+// Unload all videos + reset view to the empty dropzone (keeps saved comparisons).
+function clearWorkspace() {
   pause();
   S.slots.slice().forEach((s) => removeSlot(s.id));
   S.selA = null; S.selB = null; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
-  await clearAllSaved();
   showGrid();
   updateChrome();
+}
+
+async function resetAll() {
+  if (!window.confirm('Reset everything — clear loaded videos AND all saved comparisons?')) return;
+  cancelSessionSave();   // stop any pending debounce from resurrecting state after the wipe
+  await clearAllSaved();
+  clearWorkspace();
 }
 
 function bindFullscreenTracking() {
