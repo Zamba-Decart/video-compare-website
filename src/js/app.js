@@ -1,6 +1,6 @@
 import { S, getSlot, MAX_SLOTS } from './state.js';
 import { dom } from './dom.js';
-import { initLoaders, openPicker, removeSlot, addFiles } from './loaders.js';
+import { initLoaders, openPicker, removeSlot, addFiles, blobIdFor } from './loaders.js';
 import { initGrid, renderGrid, applyGridTransforms } from './grid.js';
 import {
   play, pause, togglePlay, seek, seekFraction, frameStep,
@@ -204,19 +204,21 @@ function resetViewState() {
 }
 
 // Restore a saved comparison: load just the two clips into a FRESH comparison
-// (default mode/positions/transforms, from the start) — not the saved positions.
-function applyRestoredComparison(rec, aId, bId) {
+// (default mode/positions/transforms, from the start) — but bring back its reference image.
+function applyRestoredComparison(rec, aId, bId, refData) {
   S.selA = aId;
   S.selB = bId;
   resetViewState();
   S.curTime = 0;
   restoreSeekTime = null;
+  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, true);
+  else { clearReferenceImage(); S.reference.on = false; }
   showOverlay();
   if (S.autoplay) play();
 }
 
 // Restore a whole session (created = freshly-made slots, in order).
-function applyRestoredSession(rec, created) {
+function applyRestoredSession(rec, created, refData) {
   S.loop = rec.loop !== false;
   S.autoplay = rec.autoplay !== false;
   S.muted = rec.muted !== false;
@@ -237,6 +239,7 @@ function applyRestoredSession(rec, created) {
   S.selA = resolveSel(rec.selA);
   S.selB = resolveSel(rec.selB);
   applyViewState(rec);
+  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, refData.on);
 
   if (rec.view === 'overlay' && canOverlay()) showOverlay();
   else showGrid();
@@ -376,6 +379,7 @@ function syncReferenceUI() {
 function toggleReference() {
   S.reference.on = !S.reference.on;
   updateChrome();
+  scheduleSessionSave();
   if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }   // stage width changed → re-fit + re-place divider
 }
 
@@ -384,12 +388,27 @@ function loadReferenceImage(file) {
   if (S.reference.url) URL.revokeObjectURL(S.reference.url);
   S.reference.file = file;
   S.reference.name = file.name;
+  S.reference.blobId = blobIdFor(file, file.name);
   S.reference.url = URL.createObjectURL(file);
   dom.refImg.src = S.reference.url;
   S.reference.on = true;
   syncReferenceUI();
   updateChrome();
+  scheduleSessionSave();
   if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }
+}
+
+// Restore a persisted reference image (preserves its original blobId for re-save consistency).
+function restoreReference(blob, name, blobId, on) {
+  if (!blob) return;
+  if (S.reference.url) URL.revokeObjectURL(S.reference.url);
+  S.reference.file = blob instanceof File ? blob : new File([blob], name || 'reference', { type: blob.type || 'image/png' });
+  S.reference.name = name || 'reference';
+  S.reference.blobId = blobId || blobIdFor(S.reference.file, S.reference.name);
+  S.reference.url = URL.createObjectURL(blob);
+  S.reference.on = !!on;
+  dom.refImg.src = S.reference.url;
+  syncReferenceUI();
 }
 
 function clearReferenceImage() {
@@ -397,6 +416,7 @@ function clearReferenceImage() {
   S.reference.url = null;
   S.reference.name = null;
   S.reference.file = null;
+  S.reference.blobId = null;
   dom.refImg.removeAttribute('src');
   syncReferenceUI();
 }
@@ -529,7 +549,7 @@ function bindToolbar() {
   // reference image
   dom.referenceBtn.addEventListener('click', toggleReference);
   dom.referenceInput.addEventListener('change', (e) => { loadReferenceImage(e.target.files[0]); dom.referenceInput.value = ''; });
-  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearReferenceImage(); });
+  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearReferenceImage(); scheduleSessionSave(); });
 }
 
 function bindTransport() {

@@ -29,16 +29,27 @@ async function safe(promise, fallback) {
   try { return await promise; } catch (e) { return fallback; }
 }
 
-// Returns the blob id, or null if the blob could not be stored (quota / no storage),
-// so callers never persist a record that references a non-existent blob.
-async function ensureBlob(slot) {
-  const id = slotBlobId(slot);
+// Store a blob under `id` if not already present. Returns the id, or null on failure
+// (quota / no storage), so callers never persist a record pointing at a missing blob.
+async function ensureBlobId(id, blob, name) {
+  if (!id || !blob) return null;
   try {
-    if (!(await hasBlob(id))) await putBlob(id, slot.file, slot.name);
+    if (!(await hasBlob(id))) await putBlob(id, blob, name);
     return id;
   } catch (e) {
     return null;
   }
+}
+
+const ensureBlob = (slot) => ensureBlobId(slotBlobId(slot), slot.file, slot.name);
+
+// Persist the current reference image (if any). Returns { blobId, name } or null.
+async function ensureReference() {
+  const ref = S.reference;
+  if (!ref || !ref.file) return null;
+  const id = ref.blobId || blobIdFor(ref.file, ref.name);
+  const stored = await ensureBlobId(id, ref.file, ref.name);
+  return stored ? { blobId: stored, name: ref.name } : null;
 }
 
 // Small gallery thumbnail of the current overlay (ignores zoom/pan/rotate for a clean frame).
@@ -102,6 +113,7 @@ export async function saveCurrentComparison() {
     window.alert('Couldn’t save — browser storage is unavailable or full.');
     return false;
   }
+  const reference = await ensureReference();   // {blobId,name} or null
 
   const rec = {
     id: `cmp-${Date.now()}-${Math.floor(Math.random() * 1e5)}`,
@@ -110,6 +122,7 @@ export async function saveCurrentComparison() {
     preview,
     a: { blobId: aId, name: a.name },
     b: { blobId: bId, name: b.name },
+    reference,
     mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
     zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
   };
@@ -178,7 +191,15 @@ async function restoreSave(id) {
     window.alert('Could not restore — the saved video data is missing.');
     return;
   }
-  onApply(rec, a.slot.id, b.slot.id);
+  onApply(rec, a.slot.id, b.slot.id, await loadReference(rec.reference));
+}
+
+// Load a saved reference image blob; returns { blob, name, blobId } or null.
+async function loadReference(ref) {
+  if (!ref || !ref.blobId) return null;
+  const rec = await safe(getBlob(ref.blobId), null);
+  if (!rec) return null;
+  return { blob: rec.blob, name: ref.name || rec.name, blobId: ref.blobId };
 }
 
 async function deleteSave(id) {
@@ -214,10 +235,12 @@ export async function saveSessionNow() {
       const id = await ensureBlob(s);
       if (id) slots.push({ blobId: id, name: s.name });
     }
+    const refDesc = await ensureReference();
     const rec = {
       slots,
       selA: aSlot ? slotBlobId(aSlot) : null,   // by content id, robust to skipped/deduped slots on restore
       selB: bSlot ? slotBlobId(bSlot) : null,
+      reference: refDesc ? { ...refDesc, on: S.reference.on } : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
       loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, curTime: S.curTime,
@@ -239,7 +262,9 @@ export async function restoreSession() {
     if (slot) created.push(slot);
   }
   if (!created.length) return false;
-  onApplySession(rec, created);
+  const refData = await loadReference(rec.reference);
+  if (refData && rec.reference) refData.on = rec.reference.on !== false;
+  onApplySession(rec, created, refData);
   return true;
 }
 
@@ -263,10 +288,12 @@ async function gcBlobs() {
   try {
     const keep = new Set();
     const saves = (await safe(kvGet('saves'), [])) || [];
-    saves.forEach((r) => { keep.add(r.a.blobId); keep.add(r.b.blobId); });
+    saves.forEach((r) => { keep.add(r.a.blobId); keep.add(r.b.blobId); if (r.reference) keep.add(r.reference.blobId); });
     const sess = await safe(kvGet('session'), null);
     if (sess && Array.isArray(sess.slots)) sess.slots.forEach((s) => keep.add(s.blobId));
+    if (sess && sess.reference) keep.add(sess.reference.blobId);
     S.slots.forEach((s) => keep.add(slotBlobId(s)));
+    if (S.reference && S.reference.blobId) keep.add(S.reference.blobId);   // currently-loaded reference
     const ids = (await safe(listBlobIds(), [])) || [];
     for (const id of ids) if (!keep.has(id)) await safe(deleteBlob(id));
   } catch (e) { /* ignore */ }

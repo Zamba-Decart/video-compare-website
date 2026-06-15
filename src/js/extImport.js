@@ -1,10 +1,11 @@
 // Video Compare extension import helper.
 //
 // External scripts can post:
-//   { type: 'LOAD_VIDEOS', videos: [{ blob | dataUrl | buffer, name, type }] }
+//   { type: 'LOAD_VIDEOS', mode: 'replace' | 'append', videos: [...] }
 // and this module loads the videos through the same path as drag/drop uploads.
 
-import { addFiles } from './loaders.js';
+import { S } from './state.js';
+import { addFiles, removeSlot } from './loaders.js';
 
 function dataUrlToBlob(dataUrl) {
   const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl || '');
@@ -42,11 +43,26 @@ function descriptorToFile(video, index) {
     : new File([blob], name, { type });
 }
 
-export function loadVideoFiles(videos) {
+function clearCurrentVideos() {
+  S.slots.slice().forEach((slot) => removeSlot(slot.id));
+  S.selA = null;
+  S.selB = null;
+  S.view = 'grid';
+  S.zoom = 1;
+  S.panX = 0;
+  S.panY = 0;
+  S.rotation = 0;
+  S.flipH = false;
+  S.flipV = false;
+  S.curTime = 0;
+}
+
+export function loadVideoFiles(videos, options = {}) {
   const files = Array.from(videos || [])
     .map(descriptorToFile)
     .filter(Boolean);
 
+  if (files.length && options.mode === 'replace') clearCurrentVideos();
   if (files.length) addFiles(files);
 }
 
@@ -55,7 +71,7 @@ window.addEventListener('message', (event) => {
 
   const { data } = event;
   if (!data || typeof data !== 'object') return;
-  if (data.type === 'LOAD_VIDEOS') loadVideoFiles(data.videos);
+  if (data.type === 'LOAD_VIDEOS') loadVideoFiles(data.videos, { mode: data.mode || 'append' });
 });
 
 window.importVideosFromExtension = loadVideoFiles;

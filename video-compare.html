@@ -842,9 +842,10 @@ const S = {
   // Ephemeral for now; fields kept together so persistence can be added later.
   reference: {
     on: false,
-    url: null,    // object URL for display
+    url: null,     // object URL for display
     name: null,
-    file: null,   // the File/blob (for future session/saves persistence)
+    file: null,    // the File/blob, persisted to IndexedDB
+    blobId: null,  // stable content id (kept across re-saves / restores)
   },
 };
 
@@ -1766,16 +1767,27 @@ async function safe(promise, fallback) {
   try { return await promise; } catch (e) { return fallback; }
 }
 
-// Returns the blob id, or null if the blob could not be stored (quota / no storage),
-// so callers never persist a record that references a non-existent blob.
-async function ensureBlob(slot) {
-  const id = slotBlobId(slot);
+// Store a blob under `id` if not already present. Returns the id, or null on failure
+// (quota / no storage), so callers never persist a record pointing at a missing blob.
+async function ensureBlobId(id, blob, name) {
+  if (!id || !blob) return null;
   try {
-    if (!(await hasBlob(id))) await putBlob(id, slot.file, slot.name);
+    if (!(await hasBlob(id))) await putBlob(id, blob, name);
     return id;
   } catch (e) {
     return null;
   }
+}
+
+const ensureBlob = (slot) => ensureBlobId(slotBlobId(slot), slot.file, slot.name);
+
+// Persist the current reference image (if any). Returns { blobId, name } or null.
+async function ensureReference() {
+  const ref = S.reference;
+  if (!ref || !ref.file) return null;
+  const id = ref.blobId || blobIdFor(ref.file, ref.name);
+  const stored = await ensureBlobId(id, ref.file, ref.name);
+  return stored ? { blobId: stored, name: ref.name } : null;
 }
 
 // Small gallery thumbnail of the current overlay (ignores zoom/pan/rotate for a clean frame).
@@ -1839,6 +1851,7 @@ async function saveCurrentComparison() {
     window.alert('Couldn’t save — browser storage is unavailable or full.');
     return false;
   }
+  const reference = await ensureReference();   // {blobId,name} or null
 
   const rec = {
     id: `cmp-${Date.now()}-${Math.floor(Math.random() * 1e5)}`,
@@ -1847,6 +1860,7 @@ async function saveCurrentComparison() {
     preview,
     a: { blobId: aId, name: a.name },
     b: { blobId: bId, name: b.name },
+    reference,
     mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
     zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
   };
@@ -1915,7 +1929,15 @@ async function restoreSave(id) {
     window.alert('Could not restore — the saved video data is missing.');
     return;
   }
-  onApply(rec, a.slot.id, b.slot.id);
+  onApply(rec, a.slot.id, b.slot.id, await loadReference(rec.reference));
+}
+
+// Load a saved reference image blob; returns { blob, name, blobId } or null.
+async function loadReference(ref) {
+  if (!ref || !ref.blobId) return null;
+  const rec = await safe(getBlob(ref.blobId), null);
+  if (!rec) return null;
+  return { blob: rec.blob, name: ref.name || rec.name, blobId: ref.blobId };
 }
 
 async function deleteSave(id) {
@@ -1951,10 +1973,12 @@ async function saveSessionNow() {
       const id = await ensureBlob(s);
       if (id) slots.push({ blobId: id, name: s.name });
     }
+    const refDesc = await ensureReference();
     const rec = {
       slots,
       selA: aSlot ? slotBlobId(aSlot) : null,   // by content id, robust to skipped/deduped slots on restore
       selB: bSlot ? slotBlobId(bSlot) : null,
+      reference: refDesc ? { ...refDesc, on: S.reference.on } : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
       loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, curTime: S.curTime,
@@ -1976,7 +2000,9 @@ async function restoreSession() {
     if (slot) created.push(slot);
   }
   if (!created.length) return false;
-  onApplySession(rec, created);
+  const refData = await loadReference(rec.reference);
+  if (refData && rec.reference) refData.on = rec.reference.on !== false;
+  onApplySession(rec, created, refData);
   return true;
 }
 
@@ -2000,10 +2026,12 @@ async function gcBlobs() {
   try {
     const keep = new Set();
     const saves = (await safe(kvGet('saves'), [])) || [];
-    saves.forEach((r) => { keep.add(r.a.blobId); keep.add(r.b.blobId); });
+    saves.forEach((r) => { keep.add(r.a.blobId); keep.add(r.b.blobId); if (r.reference) keep.add(r.reference.blobId); });
     const sess = await safe(kvGet('session'), null);
     if (sess && Array.isArray(sess.slots)) sess.slots.forEach((s) => keep.add(s.blobId));
+    if (sess && sess.reference) keep.add(sess.reference.blobId);
     S.slots.forEach((s) => keep.add(slotBlobId(s)));
+    if (S.reference && S.reference.blobId) keep.add(S.reference.blobId);   // currently-loaded reference
     const ids = (await safe(listBlobIds(), [])) || [];
     for (const id of ids) if (!keep.has(id)) await safe(deleteBlob(id));
   } catch (e) { /* ignore */ }
@@ -2013,12 +2041,14 @@ async function gcBlobs() {
 })();
 
 const __m_extImport = (function () {
-  const { addFiles } = __m_loaders;
+  const { S } = __m_state;
+  const { addFiles, removeSlot } = __m_loaders;
 // Video Compare extension import helper.
 //
 // External scripts can post:
-//   { type: 'LOAD_VIDEOS', videos: [{ blob | dataUrl | buffer, name, type }] }
+//   { type: 'LOAD_VIDEOS', mode: 'replace' | 'append', videos: [...] }
 // and this module loads the videos through the same path as drag/drop uploads.
+
 
 
 
@@ -2058,11 +2088,26 @@ function descriptorToFile(video, index) {
     : new File([blob], name, { type });
 }
 
-function loadVideoFiles(videos) {
+function clearCurrentVideos() {
+  S.slots.slice().forEach((slot) => removeSlot(slot.id));
+  S.selA = null;
+  S.selB = null;
+  S.view = 'grid';
+  S.zoom = 1;
+  S.panX = 0;
+  S.panY = 0;
+  S.rotation = 0;
+  S.flipH = false;
+  S.flipV = false;
+  S.curTime = 0;
+}
+
+function loadVideoFiles(videos, options = {}) {
   const files = Array.from(videos || [])
     .map(descriptorToFile)
     .filter(Boolean);
 
+  if (files.length && options.mode === 'replace') clearCurrentVideos();
   if (files.length) addFiles(files);
 }
 
@@ -2071,7 +2116,7 @@ window.addEventListener('message', (event) => {
 
   const { data } = event;
   if (!data || typeof data !== 'object') return;
-  if (data.type === 'LOAD_VIDEOS') loadVideoFiles(data.videos);
+  if (data.type === 'LOAD_VIDEOS') loadVideoFiles(data.videos, { mode: data.mode || 'append' });
 });
 
 window.importVideosFromExtension = loadVideoFiles;
@@ -2082,7 +2127,7 @@ window.importVideosFromExtension = loadVideoFiles;
 const __m_app = (function () {
   const { S, getSlot, MAX_SLOTS } = __m_state;
   const { dom } = __m_dom;
-  const { initLoaders, openPicker, removeSlot, addFiles } = __m_loaders;
+  const { initLoaders, openPicker, removeSlot, addFiles, blobIdFor } = __m_loaders;
   const { initGrid, renderGrid, applyGridTransforms } = __m_grid;
   const { play, pause, togglePlay, seek, seekFraction, frameStep, setMuted, setLoop, setAutoplay, setRate, syncActive, computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton } = __m_playback;
   const { renderOverlay, mountOverlay, applyAspectRatio, clearAspectRatio, renderInfoBar } = __m_viewer;
@@ -2286,19 +2331,21 @@ function resetViewState() {
 }
 
 // Restore a saved comparison: load just the two clips into a FRESH comparison
-// (default mode/positions/transforms, from the start) — not the saved positions.
-function applyRestoredComparison(rec, aId, bId) {
+// (default mode/positions/transforms, from the start) — but bring back its reference image.
+function applyRestoredComparison(rec, aId, bId, refData) {
   S.selA = aId;
   S.selB = bId;
   resetViewState();
   S.curTime = 0;
   restoreSeekTime = null;
+  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, true);
+  else { clearReferenceImage(); S.reference.on = false; }
   showOverlay();
   if (S.autoplay) play();
 }
 
 // Restore a whole session (created = freshly-made slots, in order).
-function applyRestoredSession(rec, created) {
+function applyRestoredSession(rec, created, refData) {
   S.loop = rec.loop !== false;
   S.autoplay = rec.autoplay !== false;
   S.muted = rec.muted !== false;
@@ -2319,6 +2366,7 @@ function applyRestoredSession(rec, created) {
   S.selA = resolveSel(rec.selA);
   S.selB = resolveSel(rec.selB);
   applyViewState(rec);
+  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, refData.on);
 
   if (rec.view === 'overlay' && canOverlay()) showOverlay();
   else showGrid();
@@ -2458,6 +2506,7 @@ function syncReferenceUI() {
 function toggleReference() {
   S.reference.on = !S.reference.on;
   updateChrome();
+  scheduleSessionSave();
   if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }   // stage width changed → re-fit + re-place divider
 }
 
@@ -2466,12 +2515,27 @@ function loadReferenceImage(file) {
   if (S.reference.url) URL.revokeObjectURL(S.reference.url);
   S.reference.file = file;
   S.reference.name = file.name;
+  S.reference.blobId = blobIdFor(file, file.name);
   S.reference.url = URL.createObjectURL(file);
   dom.refImg.src = S.reference.url;
   S.reference.on = true;
   syncReferenceUI();
   updateChrome();
+  scheduleSessionSave();
   if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }
+}
+
+// Restore a persisted reference image (preserves its original blobId for re-save consistency).
+function restoreReference(blob, name, blobId, on) {
+  if (!blob) return;
+  if (S.reference.url) URL.revokeObjectURL(S.reference.url);
+  S.reference.file = blob instanceof File ? blob : new File([blob], name || 'reference', { type: blob.type || 'image/png' });
+  S.reference.name = name || 'reference';
+  S.reference.blobId = blobId || blobIdFor(S.reference.file, S.reference.name);
+  S.reference.url = URL.createObjectURL(blob);
+  S.reference.on = !!on;
+  dom.refImg.src = S.reference.url;
+  syncReferenceUI();
 }
 
 function clearReferenceImage() {
@@ -2479,6 +2543,7 @@ function clearReferenceImage() {
   S.reference.url = null;
   S.reference.name = null;
   S.reference.file = null;
+  S.reference.blobId = null;
   dom.refImg.removeAttribute('src');
   syncReferenceUI();
 }
@@ -2611,7 +2676,7 @@ function bindToolbar() {
   // reference image
   dom.referenceBtn.addEventListener('click', toggleReference);
   dom.referenceInput.addEventListener('change', (e) => { loadReferenceImage(e.target.files[0]); dom.referenceInput.value = ''; });
-  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearReferenceImage(); });
+  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearReferenceImage(); scheduleSessionSave(); });
 }
 
 function bindTransport() {

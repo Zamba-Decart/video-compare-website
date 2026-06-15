@@ -40,9 +40,10 @@ export const S = {
   // Ephemeral for now; fields kept together so persistence can be added later.
   reference: {
     on: false,
-    url: null,    // object URL for display
+    url: null,     // object URL for display
     name: null,
-    file: null,   // the File/blob (for future session/saves persistence)
+    file: null,    // the File/blob, persisted to IndexedDB
+    blobId: null,  // stable content id (kept across re-saves / restores)
   },
 };
 
