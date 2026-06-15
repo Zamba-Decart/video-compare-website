@@ -10,7 +10,9 @@ let lastDrift = 0;
 // ---- active set ---------------------------------------------------------
 export function getActiveSlots() {
   if (S.view === 'overlay') {
-    return [getSlot(S.selA), getSlot(S.selB)].filter(Boolean);
+    const slots = [getSlot(S.selA), getSlot(S.selB)];
+    if (S.refVideoOn) slots.unshift(getSlot(S.refVideoId));
+    return slots.filter(Boolean).filter((slot, index, arr) => arr.findIndex((s) => s.id === slot.id) === index);
   }
   return S.slots;
 }

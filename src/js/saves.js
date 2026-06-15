@@ -229,6 +229,7 @@ export async function saveSessionNow() {
     if (!S.slots.length) { await safe(kvDel('session')); return; }
     const aSlot = getSlot(S.selA);
     const bSlot = getSlot(S.selB);
+    const refVideoSlot = getSlot(S.refVideoId);
     const slots = [];
     for (const s of S.slots) {
       if (gen !== wipeGen) return;          // a reset happened mid-flight — don't resurrect
@@ -240,6 +241,8 @@ export async function saveSessionNow() {
       slots,
       selA: aSlot ? slotBlobId(aSlot) : null,   // by content id, robust to skipped/deduped slots on restore
       selB: bSlot ? slotBlobId(bSlot) : null,
+      refVideoId: refVideoSlot ? slotBlobId(refVideoSlot) : null,
+      refVideoOn: !!S.refVideoOn,
       reference: refDesc ? { ...refDesc, on: S.reference.on } : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,

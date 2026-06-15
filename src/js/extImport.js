@@ -47,6 +47,8 @@ function clearCurrentVideos() {
   S.slots.slice().forEach((slot) => removeSlot(slot.id));
   S.selA = null;
   S.selB = null;
+  S.refVideoId = null;
+  S.refVideoOn = false;
   S.view = 'grid';
   S.zoom = 1;
   S.panX = 0;
@@ -66,12 +68,21 @@ export function loadVideoFiles(videos, options = {}) {
   if (files.length) addFiles(files);
 }
 
+function loadReferenceImage(referenceImage) {
+  const file = descriptorToFile(referenceImage, 0);
+  if (!file || !(file.type || '').startsWith('image/')) return;
+  window.dispatchEvent(new CustomEvent('LOAD_REFERENCE_IMAGE', { detail: { file } }));
+}
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
 
   const { data } = event;
   if (!data || typeof data !== 'object') return;
-  if (data.type === 'LOAD_VIDEOS') loadVideoFiles(data.videos, { mode: data.mode || 'append' });
+  if (data.type === 'LOAD_VIDEOS') {
+    loadVideoFiles(data.videos, { mode: data.mode || 'append' });
+    loadReferenceImage(data.referenceImage);
+  }
 });
 
 window.importVideosFromExtension = loadVideoFiles;

@@ -261,6 +261,41 @@ body.reference-on .stage-row > .stage-wrap {
   max-width: 100%; max-height: 100%;
   object-fit: contain; display: block; user-select: none;
 }
+.ref-video-stage {
+  position: absolute;
+  inset: 0;
+  background: #0a0a0c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ref-video-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #0a0a0c;
+}
+.ref-video-label {
+  position: absolute;
+  left: 13px;
+  bottom: 13px;
+  max-width: calc(100% - 26px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.7);
+  color: #ffcf5a;
+  border: 1px solid rgba(255,207,90,0.28);
+  pointer-events: none;
+  z-index: 2;
+}
 .ref-tag {
   position: absolute; top: 13px; left: 13px;
   font-family: 'Space Mono', monospace;
@@ -637,6 +672,7 @@ body.is-fullscreen .stage-wrap {
     <div class="ab-pickers" id="ab-pickers" hidden title="Pick which clips to compare ( [ ] cycle B · Shift+[ ] cycle A )">
       <label class="ab-pick ab-pick-a"><span>A</span><select id="pick-a"></select></label>
       <label class="ab-pick ab-pick-b"><span>B</span><select id="pick-b"></select></label>
+      <label class="ab-pick ref-video-pick" id="ref-video-pick" hidden><span>R</span><select id="pick-ref"></select></label>
     </div>
 
     <div class="d-wrap" id="d-wrap" hidden style="opacity:0.3;pointer-events:none;">
@@ -657,6 +693,7 @@ body.is-fullscreen .stage-wrap {
       <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
       <button class="tool-btn" id="export-btn" hidden>⇩ Screenshot</button>
+      <button class="tool-btn" id="ref-video-btn" hidden>📌 Pin ref</button>
       <button class="tool-btn" id="reference-btn" hidden>🖼 Reference</button>
       <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
@@ -674,6 +711,9 @@ body.is-fullscreen .stage-wrap {
         <div class="dz-label">Drop reference image<br>or click to browse</div>
       </div>
       <img class="ref-img" id="ref-img" alt="reference" draggable="false" hidden>
+      <div class="ref-video-stage" id="ref-video-stage" hidden>
+        <div class="ref-video-label" id="ref-video-label">Reference</div>
+      </div>
       <div class="ref-tag">Reference</div>
       <button class="ref-clear" id="ref-clear" type="button" title="Remove reference" hidden>×</button>
     </div>
@@ -808,6 +848,9 @@ const S = {
   view: 'grid',        // 'grid' | 'overlay'
   selA: null,          // slot id assigned to A
   selB: null,          // slot id assigned to B
+  refVideoId: null,    // slot id pinned in the left reference panel
+  refVideoOn: false,
+  autoPinReference: true,
 
   // overlay comparison
   mode: 'slider',      // 'slider' | 'dissolve' | 'toggle'
@@ -876,6 +919,8 @@ const dom = {
   abPickers: $('ab-pickers'),
   pickA: $('pick-a'),
   pickB: $('pick-b'),
+  refVideoPick: $('ref-video-pick'),
+  pickRef: $('pick-ref'),
   dWrap: $('d-wrap'),
   dRange: $('d-range'),
   dPct: $('d-pct'),
@@ -888,6 +933,7 @@ const dom = {
   rotateBtn: $('rotate-btn'),
   resetViewBtn: $('reset-view-btn'),
   exportBtn: $('export-btn'),
+  refVideoBtn: $('ref-video-btn'),
   referenceBtn: $('reference-btn'),
   saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
@@ -902,6 +948,8 @@ const dom = {
   referenceInput: $('reference-input'),
   refDrop: $('ref-drop'),
   refImg: $('ref-img'),
+  refVideoStage: $('ref-video-stage'),
+  refVideoLabel: $('ref-video-label'),
   refClear: $('ref-clear'),
 
   // stage
@@ -1137,7 +1185,9 @@ let lastDrift = 0;
 // ---- active set ---------------------------------------------------------
 function getActiveSlots() {
   if (S.view === 'overlay') {
-    return [getSlot(S.selA), getSlot(S.selB)].filter(Boolean);
+    const slots = [getSlot(S.selA), getSlot(S.selB)];
+    if (S.refVideoOn) slots.unshift(getSlot(S.refVideoId));
+    return slots.filter(Boolean).filter((slot, index, arr) => arr.findIndex((s) => s.id === slot.id) === index);
   }
   return S.slots;
 }
@@ -1373,6 +1423,19 @@ function mountOverlay() {
   dom.comp.prepend(a.videoEl);
 }
 
+function mountReferenceVideo() {
+  const ref = S.refVideoOn ? getSlot(S.refVideoId) : null;
+  dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
+  if (!ref) return;
+
+  ref.videoEl.style.clipPath = 'none';
+  ref.videoEl.style.opacity = '1';
+  ref.videoEl.style.transform = 'none';
+  ref.videoEl.style.transformOrigin = 'center center';
+  dom.refVideoStage.appendChild(ref.videoEl);
+  dom.refVideoLabel.textContent = stripExt(ref.name);
+}
+
 function applyTransforms(els) {
   const sx = S.flipH ? -1 : 1;
   const sy = S.flipV ? -1 : 1;
@@ -1472,7 +1535,9 @@ function renderOverlay() {
 function renderInfoBar() {
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
+  const r = S.refVideoOn ? getSlot(S.refVideoId) : null;
   const parts = [];
+  if (r) parts.push({ color: '#ffcf5a', text: `R: ${stripExt(r.name)}  ${r.w}×${r.h}` });
   if (a) parts.push({ color: 'var(--acc)', text: `A: ${stripExt(a.name)}  ${a.w}×${a.h}` });
   if (b) parts.push({ color: 'var(--acc2)', text: `B: ${stripExt(b.name)}  ${b.w}×${b.h}` });
   dom.infoList.innerHTML = parts
@@ -1480,7 +1545,7 @@ function renderInfoBar() {
     .join('');
 }
 
-  return { applyAspectRatio, clearAspectRatio, mountOverlay, renderOverlay, renderInfoBar };
+  return { applyAspectRatio, clearAspectRatio, mountOverlay, mountReferenceVideo, renderOverlay, renderInfoBar };
 })();
 
 const __m_grid = (function () {
@@ -1967,6 +2032,7 @@ async function saveSessionNow() {
     if (!S.slots.length) { await safe(kvDel('session')); return; }
     const aSlot = getSlot(S.selA);
     const bSlot = getSlot(S.selB);
+    const refVideoSlot = getSlot(S.refVideoId);
     const slots = [];
     for (const s of S.slots) {
       if (gen !== wipeGen) return;          // a reset happened mid-flight — don't resurrect
@@ -1978,6 +2044,8 @@ async function saveSessionNow() {
       slots,
       selA: aSlot ? slotBlobId(aSlot) : null,   // by content id, robust to skipped/deduped slots on restore
       selB: bSlot ? slotBlobId(bSlot) : null,
+      refVideoId: refVideoSlot ? slotBlobId(refVideoSlot) : null,
+      refVideoOn: !!S.refVideoOn,
       reference: refDesc ? { ...refDesc, on: S.reference.on } : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
@@ -2092,6 +2160,8 @@ function clearCurrentVideos() {
   S.slots.slice().forEach((slot) => removeSlot(slot.id));
   S.selA = null;
   S.selB = null;
+  S.refVideoId = null;
+  S.refVideoOn = false;
   S.view = 'grid';
   S.zoom = 1;
   S.panX = 0;
@@ -2111,12 +2181,21 @@ function loadVideoFiles(videos, options = {}) {
   if (files.length) addFiles(files);
 }
 
+function loadReferenceImage(referenceImage) {
+  const file = descriptorToFile(referenceImage, 0);
+  if (!file || !(file.type || '').startsWith('image/')) return;
+  window.dispatchEvent(new CustomEvent('LOAD_REFERENCE_IMAGE', { detail: { file } }));
+}
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
 
   const { data } = event;
   if (!data || typeof data !== 'object') return;
-  if (data.type === 'LOAD_VIDEOS') loadVideoFiles(data.videos, { mode: data.mode || 'append' });
+  if (data.type === 'LOAD_VIDEOS') {
+    loadVideoFiles(data.videos, { mode: data.mode || 'append' });
+    loadReferenceImage(data.referenceImage);
+  }
 });
 
 window.importVideosFromExtension = loadVideoFiles;
@@ -2130,7 +2209,7 @@ const __m_app = (function () {
   const { initLoaders, openPicker, removeSlot, addFiles, blobIdFor } = __m_loaders;
   const { initGrid, renderGrid, applyGridTransforms } = __m_grid;
   const { play, pause, togglePlay, seek, seekFraction, frameStep, setMuted, setLoop, setAutoplay, setRate, syncActive, computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton } = __m_playback;
-  const { renderOverlay, mountOverlay, applyAspectRatio, clearAspectRatio, renderInfoBar } = __m_viewer;
+  const { renderOverlay, mountOverlay, mountReferenceVideo, applyAspectRatio, clearAspectRatio, renderInfoBar } = __m_viewer;
   const { exportCurrentFrame, exportGridFrame } = __m_export;
   const { stripExt } = __m_helpers;
   const { initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow, restoreSession, renderSavesFromStore, invalidateSession } = __m_saves;
@@ -2148,6 +2227,7 @@ let restoreSeekTime = null;   // one-shot: seek to a restored session's saved ti
 
 const hasVideos = () => S.slots.length > 0;
 const canOverlay = () => S.selA && S.selB && S.selA !== S.selB;
+const canPinRefVideo = () => S.slots.some((s) => s.id !== S.selA && s.id !== S.selB);
 
 // ---------- view / chrome ------------------------------------------------
 function updateChrome() {
@@ -2164,14 +2244,24 @@ function updateChrome() {
   dom.dWrap.hidden = !overlay;
   // overlay-only tools
   [dom.swapBtn, dom.resetViewBtn, dom.referenceBtn].forEach((b) => { b.hidden = !overlay; });
+  dom.refVideoBtn.hidden = !overlay || !canPinRefVideo();
+  dom.refVideoPick.hidden = !overlay || !canPinRefVideo();
   // available in BOTH grid and overlay (whenever videos are loaded)
   [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
 
   // reference panel: overlay-only + only when toggled on
-  const refVisible = overlay && S.reference.on;
+  const refVideoVisible = overlay && S.refVideoOn && getSlot(S.refVideoId);
+  const refImageVisible = overlay && S.reference.on;
+  const refVisible = refVideoVisible || refImageVisible;
+  dom.refVideoBtn.classList.toggle('is-on', refVideoVisible);
+  dom.refVideoBtn.textContent = refVideoVisible ? '📌 Unpin ref' : '📌 Pin ref';
   dom.referenceBtn.classList.toggle('is-on', S.reference.on);
   dom.referencePanel.hidden = !refVisible;
   dom.body.classList.toggle('reference-on', refVisible);
+  dom.refVideoStage.hidden = !refVideoVisible;
+  dom.refDrop.hidden = refVideoVisible || !!S.reference.url;
+  dom.refImg.hidden = refVideoVisible || !S.reference.url;
+  dom.refClear.hidden = !refVisible;
 
   // overlay pill availability
   dom.viewOverlayBtn.style.opacity = canOverlay() ? '1' : '0.4';
@@ -2210,7 +2300,9 @@ function showOverlay() {
   dom.videoGrid.classList.remove('on');
   dom.videoGrid.innerHTML = '';   // release tiles; videos move into #comp
   dom.comp.querySelectorAll('video').forEach((v) => v.remove());  // drop any stale overlay videos (e.g. restoring while already in overlay)
+  dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
   mountOverlay();
+  mountReferenceVideo();
   dom.comp.classList.add('ready');
   applyAspectRatio();
   syncActive();
@@ -2232,7 +2324,9 @@ function applyOverlayChange() {
   if (S.view === 'overlay') {
     if (!canOverlay()) { showGrid(); return; }
     dom.comp.querySelectorAll('video').forEach((v) => v.remove());
+    dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
     mountOverlay();
+    mountReferenceVideo();
     syncActive();
     renderOverlay();
   } else {
@@ -2260,6 +2354,10 @@ function onSelect(role, id) {
 // clip (so A and B are never the same video). No toggle-off.
 function setSide(role, id) {
   if (!id || !getSlot(id)) return;
+  if (S.refVideoOn && S.refVideoId === id) {
+    S.refVideoOn = false;
+    S.refVideoId = null;
+  }
   if (role === 'a') {
     if (S.selA === id) return;
     if (S.selB === id) S.selB = S.selA;
@@ -2299,6 +2397,78 @@ function renderPickers() {
   };
   fill(dom.pickA, S.selA);
   fill(dom.pickB, S.selB);
+
+  dom.pickRef.innerHTML = '';
+  S.slots
+    .filter((s) => s.id !== S.selA && s.id !== S.selB)
+    .forEach((s) => {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = stripExt(s.name);
+      dom.pickRef.appendChild(o);
+    });
+  if (S.refVideoId && getSlot(S.refVideoId)) dom.pickRef.value = S.refVideoId;
+}
+
+function setRefVideo(id, enabled = true) {
+  const slot = getSlot(id);
+  if (!slot || slot.id === S.selA || slot.id === S.selB) return;
+  S.refVideoId = slot.id;
+  S.refVideoOn = enabled;
+  if (S.view === 'overlay') {
+    dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
+    mountReferenceVideo();
+  }
+  syncActive();
+  updateChrome();
+  renderInfoBar();
+  renderPickers();
+  scheduleSessionSave();
+}
+
+function toggleRefVideo() {
+  if (S.refVideoOn) {
+    S.refVideoOn = false;
+    dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
+    syncActive();
+    updateChrome();
+    renderInfoBar();
+    scheduleSessionSave();
+    return;
+  }
+
+  const next = S.slots.find((s) => s.id !== S.selA && s.id !== S.selB);
+  if (next) setRefVideo(next.id, true);
+}
+
+function aspect(slot) {
+  return slot?.w && slot?.h ? slot.w / slot.h : null;
+}
+
+function dimensionsClose(a, b) {
+  const arA = aspect(a);
+  const arB = aspect(b);
+  if (!arA || !arB) return false;
+  return Math.abs(arA - arB) / Math.max(arA, arB) < 0.02;
+}
+
+function autoPinMismatchedReference() {
+  if (!S.autoPinReference || S.refVideoOn || S.slots.length < 3) return false;
+  const ready = S.slots.filter((s) => s.ready && s.w && s.h);
+  if (ready.length < 3) return false;
+
+  for (const candidate of ready) {
+    const others = ready.filter((s) => s.id !== candidate.id);
+    if (others.length >= 2 && dimensionsClose(others[0], others[1]) && !dimensionsClose(candidate, others[0])) {
+      S.selA = others[0].id;
+      S.selB = others[1].id;
+      S.refVideoId = candidate.id;
+      S.refVideoOn = true;
+      if (S.view !== 'overlay') S.view = 'overlay';
+      return true;
+    }
+  }
+  return false;
 }
 
 // Apply the overlay state (mode / positions / transforms) from a record onto S + UI.
@@ -2365,6 +2535,8 @@ function applyRestoredSession(rec, created, refData) {
   };
   S.selA = resolveSel(rec.selA);
   S.selB = resolveSel(rec.selB);
+  S.refVideoId = resolveSel(rec.refVideoId);
+  S.refVideoOn = !!rec.refVideoOn && !!S.refVideoId && S.refVideoId !== S.selA && S.refVideoId !== S.selB;
   applyViewState(rec);
   if (refData) restoreReference(refData.blob, refData.name, refData.blobId, refData.on);
 
@@ -2378,13 +2550,19 @@ function applyRestoredSession(rec, created, refData) {
 function autoAssign() {
   if (!S.selA && S.slots[0]) S.selA = S.slots[0].id;
   if (!S.selB && S.slots[1] && S.slots[1].id !== S.selA) S.selB = S.slots[1].id;
+  if (S.refVideoId && (S.refVideoId === S.selA || S.refVideoId === S.selB || !getSlot(S.refVideoId))) {
+    S.refVideoId = null;
+    S.refVideoOn = false;
+  }
 }
 
 // ---------- slot lifecycle ----------------------------------------------
 function onSlotsChanged() {
   autoAssign();
+  const autoPinned = autoPinMismatchedReference();
   if (S.view === 'overlay' && !canOverlay()) S.view = 'grid';
   if (S.view === 'grid') renderGrid();
+  else if (autoPinned && canOverlay()) showOverlay();
   computeDuration();
   updateDurationDisplay();
   syncActive();
@@ -2398,11 +2576,14 @@ function onSlotsChanged() {
 }
 
 function onMeta() {
+  const autoPinned = autoPinMismatchedReference();
+  if (autoPinned && canOverlay()) showOverlay();
   if (S.view === 'grid') renderGrid();
   computeDuration();
   updateDurationDisplay();
   renderInfoBar();
   renderPickers();
+  if (S.view === 'overlay') mountReferenceVideo();
   // re-apply a restored session's playback position once we actually know durations
   if (restoreSeekTime != null && S.duration > 0) {
     const t = restoreSeekTime;
@@ -2548,6 +2729,24 @@ function clearReferenceImage() {
   syncReferenceUI();
 }
 
+function clearActiveReference() {
+  if (S.refVideoOn) {
+    S.refVideoOn = false;
+    S.refVideoId = null;
+    dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
+    syncActive();
+    updateChrome();
+    renderInfoBar();
+    renderPickers();
+    scheduleSessionSave();
+    return;
+  }
+
+  clearReferenceImage();
+  S.reference.on = false;
+  updateChrome();
+}
+
 function resetView() {
   S.flipH = false; S.flipV = false; S.rotation = 0;
   S.zoom = 1; S.panX = 0; S.panY = 0;
@@ -2662,6 +2861,7 @@ function bindToolbar() {
 
   dom.pickA.addEventListener('change', () => { setSide('a', dom.pickA.value); dom.pickA.blur(); });
   dom.pickB.addEventListener('change', () => { setSide('b', dom.pickB.value); dom.pickB.blur(); });
+  dom.pickRef.addEventListener('change', () => { setRefVideo(dom.pickRef.value, true); dom.pickRef.blur(); });
 
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
@@ -2670,13 +2870,17 @@ function bindToolbar() {
   dom.rotateBtn.addEventListener('click', () => { S.rotation = (S.rotation + 90) % 360; afterTransformChange(); });
   dom.resetViewBtn.addEventListener('click', resetView);
   dom.exportBtn.addEventListener('click', exportCurrentView);
+  dom.refVideoBtn.addEventListener('click', toggleRefVideo);
   dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 
   // reference image
   dom.referenceBtn.addEventListener('click', toggleReference);
   dom.referenceInput.addEventListener('change', (e) => { loadReferenceImage(e.target.files[0]); dom.referenceInput.value = ''; });
-  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearReferenceImage(); scheduleSessionSave(); });
+  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearActiveReference(); scheduleSessionSave(); });
+  window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
+    loadReferenceImage(event.detail?.file);
+  });
 }
 
 function bindTransport() {
@@ -2734,7 +2938,7 @@ function clearWorkspace() {
   invalidateSession();   // bump wipe-gen + cancel pending debounce so an in-flight save can't resurrect the cleared workspace
   pause();
   S.slots.slice().forEach((s) => removeSlot(s.id));
-  S.selA = null; S.selB = null; S.view = 'grid';
+  S.selA = null; S.selB = null; S.refVideoId = null; S.refVideoOn = false; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
   clearReferenceImage();
