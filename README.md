@@ -23,13 +23,14 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
 - **Pick / swap the compared clips** without leaving overlay: A/B dropdowns, or `[` `]` / `Shift+[` `]`.
 - **Zoom & pan** (wheel to zoom to cursor, shift-drag or right-drag to pan), **flip H/V**,
   **rotate**, **reset view**, **swap A/B**, **fullscreen**.
-- **Reference image** — toggle a panel beside the A/B comparison and drop in a still to compare against; the comparison shifts right and the reference shows on the left (lots of room for portrait clips). Overlay-only.
+- **Reference image** — toggle a panel beside the A/B comparison and drop in a still to compare against; the comparison shifts right and the reference shows on the left (lots of room for portrait clips). Overlay-only, and saved/restored with the session and with each saved comparison.
 - **Screenshot** the current view as a PNG — the composited overlay frame, or the whole grid layout.
 - **Flip / rotate** apply in both grid and overlay; **Save** and **Screenshot** work from either view.
 - **Save comparisons** (★ Save) to a "Saved comparisons" rail — stored locally in IndexedDB
   (video data + settings, deduped, last ~12), restorable across reloads by clicking a card.
-- **Auto-restore** — your whole workspace (loaded clips + view + selection + settings) is
-  remembered and restored when you reopen the page. (↺ Reset All clears everything.)
+- **Auto-restore** — your whole workspace (loaded clips + view + selection + settings +
+  reference image) is remembered and restored when you reopen the page. (↺ Reset All clears
+  the current videos; saved comparisons are kept — delete those per-card.)
 
 ## Keyboard
 
@@ -48,10 +49,12 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
 ```
 video-compare-website/
 ├─ index.html              # redirect → src/index.html (GitHub Pages root)
+├─ video-compare.html      # self-contained build (generated; double-click to run)
 ├─ assets/                 # favicons
+├─ tools/build-standalone.py  # bundles src/ → video-compare.html
 └─ src/
    ├─ index.html           # markup
-   ├─ css/styles.css       # dark theme (ported from image-compare) + grid/transport
+   ├─ css/styles.css       # dark theme (ported from image-compare) + grid/transport/reference
    └─ js/
       ├─ state.js          # global state
       ├─ dom.js            # cached element refs
@@ -59,7 +62,10 @@ video-compare-website/
       ├─ grid.js           # spread/grid view + A/B selection
       ├─ playback.js       # synced master transport + drift correction
       ├─ viewer.js         # overlay render (slider / dissolve / toggle + transforms)
-      ├─ export.js         # export current frame as PNG
+      ├─ export.js         # screenshot (overlay frame / grid layout) → PNG
+      ├─ storage.js        # IndexedDB wrapper (blob + kv stores)
+      ├─ saves.js          # saved-comparisons gallery + session auto-restore
+      ├─ extImport.js      # postMessage LOAD_VIDEOS bridge for external pages
       └─ app.js            # orchestration, events, keyboard
 ```
 
