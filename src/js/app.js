@@ -48,7 +48,7 @@ function updateChrome() {
   const refImageVisible = overlay && S.reference.on;
   const refVisible = refVideoVisible || refImageVisible;
   dom.refVideoBtn.classList.toggle('is-on', refVideoVisible);
-  dom.refVideoBtn.textContent = refVideoVisible ? '📌 Unpin ref' : '📌 Pin ref';
+  dom.refVideoBtn.textContent = refVideoVisible ? '📌 Unpin Original' : '📌 Pin Original Video';
   dom.referenceBtn.classList.toggle('is-on', S.reference.on);
   dom.referencePanel.hidden = !refVisible;
   dom.body.classList.toggle('reference-on', refVisible);

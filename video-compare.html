@@ -176,13 +176,21 @@ header {
   color: var(--muted); padding: 0 2px;
 }
 
-.ab-pickers { display: flex; gap: 6px; }
+.ab-pickers {
+  display: flex;
+  gap: 6px;
+  flex: 1 1 640px;
+  min-width: min(100%, 420px);
+  flex-wrap: wrap;
+}
 .ab-pick {
   display: flex; align-items: center; gap: 6px;
   padding: 3px 8px 3px 9px;
   border-radius: 8px;
   background: var(--surf);
   border: 1px solid var(--border);
+  flex: 1 1 300px;
+  min-width: min(100%, 260px);
 }
 .ab-pick > span {
   font-family: 'Space Mono', monospace;
@@ -194,7 +202,10 @@ header {
 .ab-pick-b > span { color: var(--acc2); }
 .ab-pick select {
   font-family: 'DM Sans', sans-serif;
-  font-size: 11px; max-width: 140px;
+  font-size: 11px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   padding: 4px 4px; border-radius: 6px;
   background: var(--surf2); border: 1px solid var(--border);
   color: var(--text); cursor: pointer;
@@ -693,7 +704,7 @@ body.is-fullscreen .stage-wrap {
       <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
       <button class="tool-btn" id="export-btn" hidden>⇩ Screenshot</button>
-      <button class="tool-btn" id="ref-video-btn" hidden>📌 Pin ref</button>
+      <button class="tool-btn" id="ref-video-btn" hidden>📌 Pin Original Video</button>
       <button class="tool-btn" id="reference-btn" hidden>🖼 Reference</button>
       <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
@@ -1901,11 +1912,12 @@ function fmtWhen(ts) {
 
 // ---- saved comparisons gallery -----------------------------------------
 // Returns true if a comparison was saved. Works from grid or overlay (needs A and B set).
-async function saveCurrentComparison() {
+async function saveCurrentComparison(options = {}) {
+  const silent = !!options.silent;
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
   if (!a || !b || S.selA === S.selB) {
-    window.alert('Pick two clips (assign A and B) to save a comparison.');
+    if (!silent) window.alert('Pick two clips (assign A and B) to save a comparison.');
     return false;
   }
 
@@ -1913,7 +1925,7 @@ async function saveCurrentComparison() {
   const aId = await ensureBlob(a);
   const bId = await ensureBlob(b);
   if (!aId || !bId) {
-    window.alert('Couldn’t save — browser storage is unavailable or full.');
+    if (!silent) window.alert('Couldn’t save — browser storage is unavailable or full.');
     return false;
   }
   const reference = await ensureReference();   // {blobId,name} or null
@@ -1939,6 +1951,10 @@ async function saveCurrentComparison() {
   });
   gcBlobs();
   return true;
+}
+
+function saveCurrentComparisonQuietly() {
+  return saveCurrentComparison({ silent: true });
 }
 
 async function renderSavesFromStore() {
@@ -2105,17 +2121,19 @@ async function gcBlobs() {
   } catch (e) { /* ignore */ }
 }
 
-  return { initSaves, saveCurrentComparison, renderSavesFromStore, scheduleSessionSave, cancelSessionSave, saveSessionNow, restoreSession, invalidateSession, clearAllSaved };
+  return { initSaves, saveCurrentComparison, saveCurrentComparisonQuietly, renderSavesFromStore, scheduleSessionSave, cancelSessionSave, saveSessionNow, restoreSession, invalidateSession, clearAllSaved };
 })();
 
 const __m_extImport = (function () {
   const { S } = __m_state;
   const { addFiles, removeSlot } = __m_loaders;
+  const { saveCurrentComparisonQuietly } = __m_saves;
 // Video Compare extension import helper.
 //
 // External scripts can post:
 //   { type: 'LOAD_VIDEOS', mode: 'replace' | 'append', videos: [...] }
 // and this module loads the videos through the same path as drag/drop uploads.
+
 
 
 
@@ -2172,12 +2190,15 @@ function clearCurrentVideos() {
   S.curTime = 0;
 }
 
-function loadVideoFiles(videos, options = {}) {
+async function loadVideoFiles(videos, options = {}) {
   const files = Array.from(videos || [])
     .map(descriptorToFile)
     .filter(Boolean);
 
-  if (files.length && options.mode === 'replace') clearCurrentVideos();
+  if (files.length && options.mode === 'replace') {
+    await saveCurrentComparisonQuietly();
+    clearCurrentVideos();
+  }
   if (files.length) addFiles(files);
 }
 
@@ -2193,8 +2214,8 @@ window.addEventListener('message', (event) => {
   const { data } = event;
   if (!data || typeof data !== 'object') return;
   if (data.type === 'LOAD_VIDEOS') {
-    loadVideoFiles(data.videos, { mode: data.mode || 'append' });
-    loadReferenceImage(data.referenceImage);
+    loadVideoFiles(data.videos, { mode: data.mode || 'append' })
+      .then(() => loadReferenceImage(data.referenceImage));
   }
 });
 
@@ -2254,7 +2275,7 @@ function updateChrome() {
   const refImageVisible = overlay && S.reference.on;
   const refVisible = refVideoVisible || refImageVisible;
   dom.refVideoBtn.classList.toggle('is-on', refVideoVisible);
-  dom.refVideoBtn.textContent = refVideoVisible ? '📌 Unpin ref' : '📌 Pin ref';
+  dom.refVideoBtn.textContent = refVideoVisible ? '📌 Unpin Original' : '📌 Pin Original Video';
   dom.referenceBtn.classList.toggle('is-on', S.reference.on);
   dom.referencePanel.hidden = !refVisible;
   dom.body.classList.toggle('reference-on', refVisible);

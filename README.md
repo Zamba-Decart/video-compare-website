@@ -28,7 +28,8 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
   output videos remain in the right-side overlay. Playback stays synced, but slider/dissolve/toggle
   controls affect only the right-side A/B comparison.
 - **External dashboard imports** — the extension bridge can load videos, replace/append the
-  workspace, import a row reference image, and use readable dashboard labels for clip names.
+  workspace, import a row reference image, save the outgoing A/B comparison before replace,
+  and use readable dashboard labels for clip names.
 - **Screenshot** the current view as a PNG — the composited overlay frame, or the whole grid layout.
 - **Flip / rotate** apply in both grid and overlay; **Save** and **Screenshot** work from either view.
 - **Save comparisons** (★ Save) to a "Saved comparisons" rail — stored locally in IndexedDB
