@@ -18,7 +18,7 @@ SRC = ROOT / "src"
 JS = SRC / "js"
 
 # dependency order: leaves first, app last (each module's __m_<name> must exist before use)
-MODULE_ORDER = ["helpers", "state", "dom", "storage", "loaders", "playback", "viewer", "grid", "export", "saves", "app"]
+MODULE_ORDER = ["helpers", "state", "dom", "storage", "loaders", "playback", "viewer", "grid", "export", "saves", "extImport", "app"]
 
 IMPORT_RE = re.compile(r"""import\s*\{([^}]*)\}\s*from\s*['"]\./([\w.]+)\.js['"];?""", re.DOTALL)
 EXPORT_DECL_RE = re.compile(r"""^export\s+(async\s+function|function|const|let|class)\s+(\w+)""", re.MULTILINE)
@@ -72,11 +72,14 @@ def main():
     # strip the file:// guard (it would wrongly fire on the standalone, which IS opened via file://)
     html = re.sub(r"<!-- file-guard:start.*?file-guard:end -->\s*", "", html, flags=re.DOTALL)
 
+    # other module <script src> tags are folded into the single bundle below — drop their tags
+    html = re.sub(r'\s*<script type="module" src="\./js/(?!app\.js)[\w.]+\.js"></script>', "", html)
+
     # inline CSS
     html = re.sub(r'<link rel="stylesheet" href="\./css/styles\.css">',
                   f"<style>\n{css}\n</style>", html)
 
-    # inline the module script as one plain script (no imports => no module/fetch needed)
+    # inline the module bundle as one plain script (no imports => no module/fetch needed)
     html = re.sub(r'<script type="module" src="\./js/app\.js"></script>',
                   f"<script>\n{bundle}\n</script>", html)
 
