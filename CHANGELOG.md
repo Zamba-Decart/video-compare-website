@@ -21,6 +21,8 @@ single-page browser tool, so "releases" map to batches of work rather than tagge
 - Extension imports in `replace` mode clear stale pinned-reference state before loading the
   next row.
 - Overlay playback now syncs the pinned reference video with A/B.
+- When a pinned original/reference video is active, the loop duration is capped to the A/B
+  output videos instead of the longer original.
 - A/B/R picker controls are wider and wrap so long imported names are readable.
 - The pinned video control is labeled **Pin Original Video**.
 

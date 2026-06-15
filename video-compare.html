@@ -1207,15 +1207,26 @@ function activeVideos() {
   return getActiveSlots().map((s) => s.videoEl).filter(Boolean);
 }
 
+function timelineSlots() {
+  if (S.view === 'overlay' && S.refVideoOn) {
+    return [getSlot(S.selA), getSlot(S.selB)].filter(Boolean);
+  }
+  return getActiveSlots();
+}
+
+function timelineVideos() {
+  return timelineSlots().map((s) => s.videoEl).filter(Boolean);
+}
+
 function primaryVideo() {
   // master clock = the active video with the longest known duration
-  const vids = activeVideos().filter((v) => isFinite(v.duration) && v.duration > 0);
-  if (!vids.length) return activeVideos()[0] || null;
+  const vids = timelineVideos().filter((v) => isFinite(v.duration) && v.duration > 0);
+  if (!vids.length) return timelineVideos()[0] || activeVideos()[0] || null;
   return vids.reduce((a, b) => (b.duration > a.duration ? b : a));
 }
 
 function computeDuration() {
-  S.duration = activeVideos().reduce((m, v) => Math.max(m, v.duration || 0), 0);
+  S.duration = timelineVideos().reduce((m, v) => Math.max(m, v.duration || 0), 0);
   return S.duration;
 }
 
