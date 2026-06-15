@@ -203,6 +203,68 @@ header {
   background: var(--acc-dim); color: var(--acc);
 }
 
+/* ===== Stage row (reference panel + stage) ===== */
+.stage-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+}
+.stage-row > .stage-wrap { flex: 1.4 1 0; min-width: 0; }
+
+/* When the reference panel is open, cap the stage width so its aspect-ratio height never
+   exceeds the viewport cap — keeps the video filling the stage (no letterbox → divider stays
+   aligned). --ar (= videoW/videoH) is set by viewer.applyAspectRatio. */
+body.reference-on .stage-row > .stage-wrap {
+  max-width: calc(78vh * var(--ar, 1.78));
+}
+
+.reference-panel {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+  min-height: 320px;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.reference-panel:hover { border-color: var(--border2); }
+.reference-panel input[type=file] {
+  position: absolute; inset: 0;
+  opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.ref-drop {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px;
+  pointer-events: none; padding: 24px; text-align: center;
+}
+.ref-img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; display: block; user-select: none;
+}
+.ref-tag {
+  position: absolute; top: 13px; left: 13px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 4px 11px; border-radius: 999px;
+  background: rgba(96,184,255,0.9); color: #0a0a0c;
+  pointer-events: none;
+}
+.ref-clear {
+  position: absolute; top: 10px; right: 10px;
+  width: 26px; height: 26px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.5); color: #fff;
+  cursor: pointer; line-height: 1; font-size: 15px;
+}
+.ref-clear:hover { background: rgba(239,68,68,0.9); border-color: rgba(239,68,68,0.9); }
+
 /* ===== Stage ===== */
 .stage-wrap {
   background: var(--surf);

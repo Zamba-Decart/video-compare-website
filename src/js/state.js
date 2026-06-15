@@ -35,6 +35,15 @@ export const S = {
   scrubbing: false,
 
   isFullscreen: false,
+
+  // reference image (overlay only) — shown in a panel beside the comparison.
+  // Ephemeral for now; fields kept together so persistence can be added later.
+  reference: {
+    on: false,
+    url: null,    // object URL for display
+    name: null,
+    file: null,   // the File/blob (for future session/saves persistence)
+  },
 };
 
 export const MAX_SLOTS = 4;

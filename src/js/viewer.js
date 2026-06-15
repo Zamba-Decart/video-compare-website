@@ -6,6 +6,7 @@ export function applyAspectRatio() {
   const a = getSlot(S.selA);
   if (a && a.w && a.h) {
     dom.stageWrap.style.aspectRatio = `${a.w} / ${a.h}`;
+    dom.stageWrap.style.setProperty('--ar', a.w / a.h);   // used by the reference-on max-width cap
     dom.stageWrap.style.maxHeight = '78vh';
     dom.stageWrap.style.minHeight = '';
   }

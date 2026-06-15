@@ -216,6 +216,68 @@ header {
   background: var(--acc-dim); color: var(--acc);
 }
 
+/* ===== Stage row (reference panel + stage) ===== */
+.stage-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+}
+.stage-row > .stage-wrap { flex: 1.4 1 0; min-width: 0; }
+
+/* When the reference panel is open, cap the stage width so its aspect-ratio height never
+   exceeds the viewport cap — keeps the video filling the stage (no letterbox → divider stays
+   aligned). --ar (= videoW/videoH) is set by viewer.applyAspectRatio. */
+body.reference-on .stage-row > .stage-wrap {
+  max-width: calc(78vh * var(--ar, 1.78));
+}
+
+.reference-panel {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+  min-height: 320px;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.reference-panel:hover { border-color: var(--border2); }
+.reference-panel input[type=file] {
+  position: absolute; inset: 0;
+  opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.ref-drop {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px;
+  pointer-events: none; padding: 24px; text-align: center;
+}
+.ref-img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; display: block; user-select: none;
+}
+.ref-tag {
+  position: absolute; top: 13px; left: 13px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 4px 11px; border-radius: 999px;
+  background: rgba(96,184,255,0.9); color: #0a0a0c;
+  pointer-events: none;
+}
+.ref-clear {
+  position: absolute; top: 10px; right: 10px;
+  width: 26px; height: 26px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.5); color: #fff;
+  cursor: pointer; line-height: 1; font-size: 15px;
+}
+.ref-clear:hover { background: rgba(239,68,68,0.9); border-color: rgba(239,68,68,0.9); }
+
 /* ===== Stage ===== */
 .stage-wrap {
   background: var(--surf);
@@ -595,32 +657,49 @@ body.is-fullscreen .stage-wrap {
       <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
       <button class="tool-btn" id="export-btn" hidden>⇩ Screenshot</button>
+      <button class="tool-btn" id="reference-btn" hidden>🖼 Reference</button>
       <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
     </div>
   </div>
 
   <!-- ===== Stage ===== -->
-  <div class="stage-wrap" id="stage-wrap">
-    <div class="empty-state" id="empty-state">
-      <div class="es-icon">▦</div>
-      <div class="es-title">No videos loaded yet</div>
-      <div class="es-sub">Drop 3–4 videos above. They appear side by side and play in sync — then select two to overlay and compare.</div>
-    </div>
+  <div class="stage-row" id="stage-row">
 
-    <!-- Grid / spread view -->
-    <div class="video-grid" id="video-grid"></div>
-
-    <!-- Overlay / compare view -->
-    <div id="comp">
-      <div id="divider">
-        <div id="div-line"></div>
-        <div id="div-knob">◀▶</div>
+    <!-- Reference image panel (overlay only, toggleable) -->
+    <div class="reference-panel" id="reference-panel" hidden>
+      <input type="file" accept="image/*" id="reference-input">
+      <div class="ref-drop" id="ref-drop">
+        <div class="dz-icon">🖼</div>
+        <div class="dz-label">Drop reference image<br>or click to browse</div>
       </div>
-      <div class="img-lbl" id="lbl-a">A</div>
-      <div class="img-lbl" id="lbl-b">B</div>
-      <div id="toggle-hint">click to toggle</div>
+      <img class="ref-img" id="ref-img" alt="reference" draggable="false" hidden>
+      <div class="ref-tag">Reference</div>
+      <button class="ref-clear" id="ref-clear" type="button" title="Remove reference" hidden>×</button>
     </div>
+
+    <div class="stage-wrap" id="stage-wrap">
+      <div class="empty-state" id="empty-state">
+        <div class="es-icon">▦</div>
+        <div class="es-title">No videos loaded yet</div>
+        <div class="es-sub">Drop 3–4 videos above. They appear side by side and play in sync — then select two to overlay and compare.</div>
+      </div>
+
+      <!-- Grid / spread view -->
+      <div class="video-grid" id="video-grid"></div>
+
+      <!-- Overlay / compare view -->
+      <div id="comp">
+        <div id="divider">
+          <div id="div-line"></div>
+          <div id="div-knob">◀▶</div>
+        </div>
+        <div class="img-lbl" id="lbl-a">A</div>
+        <div class="img-lbl" id="lbl-b">B</div>
+        <div id="toggle-hint">click to toggle</div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ===== Transport ===== -->
@@ -758,6 +837,15 @@ const S = {
   scrubbing: false,
 
   isFullscreen: false,
+
+  // reference image (overlay only) — shown in a panel beside the comparison.
+  // Ephemeral for now; fields kept together so persistence can be added later.
+  reference: {
+    on: false,
+    url: null,    // object URL for display
+    name: null,
+    file: null,   // the File/blob (for future session/saves persistence)
+  },
 };
 
 const MAX_SLOTS = 4;
@@ -799,12 +887,21 @@ const dom = {
   rotateBtn: $('rotate-btn'),
   resetViewBtn: $('reset-view-btn'),
   exportBtn: $('export-btn'),
+  referenceBtn: $('reference-btn'),
   saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
 
   // saved comparisons
   savesRail: $('saves-rail'),
   savesList: $('saves-list'),
+
+  // reference panel
+  stageRow: $('stage-row'),
+  referencePanel: $('reference-panel'),
+  referenceInput: $('reference-input'),
+  refDrop: $('ref-drop'),
+  refImg: $('ref-img'),
+  refClear: $('ref-clear'),
 
   // stage
   stageWrap: $('stage-wrap'),
@@ -1252,6 +1349,7 @@ function applyAspectRatio() {
   const a = getSlot(S.selA);
   if (a && a.w && a.h) {
     dom.stageWrap.style.aspectRatio = `${a.w} / ${a.h}`;
+    dom.stageWrap.style.setProperty('--ar', a.w / a.h);   // used by the reference-on max-width cap
     dom.stageWrap.style.maxHeight = '78vh';
     dom.stageWrap.style.minHeight = '';
   }
@@ -2020,9 +2118,15 @@ function updateChrome() {
   dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
   // overlay-only tools
-  [dom.swapBtn, dom.resetViewBtn].forEach((b) => { b.hidden = !overlay; });
+  [dom.swapBtn, dom.resetViewBtn, dom.referenceBtn].forEach((b) => { b.hidden = !overlay; });
   // available in BOTH grid and overlay (whenever videos are loaded)
   [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
+
+  // reference panel: overlay-only + only when toggled on
+  const refVisible = overlay && S.reference.on;
+  dom.referenceBtn.classList.toggle('is-on', S.reference.on);
+  dom.referencePanel.hidden = !refVisible;
+  dom.body.classList.toggle('reference-on', refVisible);
 
   // overlay pill availability
   dom.viewOverlayBtn.style.opacity = canOverlay() ? '1' : '0.4';
@@ -2343,6 +2447,42 @@ function exportCurrentView() {
   else exportGridFrame();
 }
 
+// ---------- reference image (overlay side panel) ----------
+function syncReferenceUI() {
+  const has = !!S.reference.url;
+  dom.refImg.hidden = !has;
+  dom.refDrop.hidden = has;
+  dom.refClear.hidden = !has;
+}
+
+function toggleReference() {
+  S.reference.on = !S.reference.on;
+  updateChrome();
+  if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }   // stage width changed → re-fit + re-place divider
+}
+
+function loadReferenceImage(file) {
+  if (!file || !(file.type || '').startsWith('image/')) return;
+  if (S.reference.url) URL.revokeObjectURL(S.reference.url);
+  S.reference.file = file;
+  S.reference.name = file.name;
+  S.reference.url = URL.createObjectURL(file);
+  dom.refImg.src = S.reference.url;
+  S.reference.on = true;
+  syncReferenceUI();
+  updateChrome();
+  if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }
+}
+
+function clearReferenceImage() {
+  if (S.reference.url) URL.revokeObjectURL(S.reference.url);
+  S.reference.url = null;
+  S.reference.name = null;
+  S.reference.file = null;
+  dom.refImg.removeAttribute('src');
+  syncReferenceUI();
+}
+
 function resetView() {
   S.flipH = false; S.flipV = false; S.rotation = 0;
   S.zoom = 1; S.panX = 0; S.panY = 0;
@@ -2467,6 +2607,11 @@ function bindToolbar() {
   dom.exportBtn.addEventListener('click', exportCurrentView);
   dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+  // reference image
+  dom.referenceBtn.addEventListener('click', toggleReference);
+  dom.referenceInput.addEventListener('change', (e) => { loadReferenceImage(e.target.files[0]); dom.referenceInput.value = ''; });
+  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearReferenceImage(); });
 }
 
 function bindTransport() {
@@ -2527,6 +2672,8 @@ function clearWorkspace() {
   S.selA = null; S.selB = null; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
+  clearReferenceImage();
+  S.reference.on = false;
   showGrid();
   updateChrome();
 }

@@ -26,12 +26,21 @@ export const dom = {
   rotateBtn: $('rotate-btn'),
   resetViewBtn: $('reset-view-btn'),
   exportBtn: $('export-btn'),
+  referenceBtn: $('reference-btn'),
   saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
 
   // saved comparisons
   savesRail: $('saves-rail'),
   savesList: $('saves-list'),
+
+  // reference panel
+  stageRow: $('stage-row'),
+  referencePanel: $('reference-panel'),
+  referenceInput: $('reference-input'),
+  refDrop: $('ref-drop'),
+  refImg: $('ref-img'),
+  refClear: $('ref-clear'),
 
   // stage
   stageWrap: $('stage-wrap'),

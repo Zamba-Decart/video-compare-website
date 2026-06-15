@@ -70,32 +70,49 @@
       <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
       <button class="tool-btn" id="export-btn" hidden>⇩ Screenshot</button>
+      <button class="tool-btn" id="reference-btn" hidden>🖼 Reference</button>
       <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
     </div>
   </div>
 
   <!-- ===== Stage ===== -->
-  <div class="stage-wrap" id="stage-wrap">
-    <div class="empty-state" id="empty-state">
-      <div class="es-icon">▦</div>
-      <div class="es-title">No videos loaded yet</div>
-      <div class="es-sub">Drop 3–4 videos above. They appear side by side and play in sync — then select two to overlay and compare.</div>
-    </div>
+  <div class="stage-row" id="stage-row">
 
-    <!-- Grid / spread view -->
-    <div class="video-grid" id="video-grid"></div>
-
-    <!-- Overlay / compare view -->
-    <div id="comp">
-      <div id="divider">
-        <div id="div-line"></div>
-        <div id="div-knob">◀▶</div>
+    <!-- Reference image panel (overlay only, toggleable) -->
+    <div class="reference-panel" id="reference-panel" hidden>
+      <input type="file" accept="image/*" id="reference-input">
+      <div class="ref-drop" id="ref-drop">
+        <div class="dz-icon">🖼</div>
+        <div class="dz-label">Drop reference image<br>or click to browse</div>
       </div>
-      <div class="img-lbl" id="lbl-a">A</div>
-      <div class="img-lbl" id="lbl-b">B</div>
-      <div id="toggle-hint">click to toggle</div>
+      <img class="ref-img" id="ref-img" alt="reference" draggable="false" hidden>
+      <div class="ref-tag">Reference</div>
+      <button class="ref-clear" id="ref-clear" type="button" title="Remove reference" hidden>×</button>
     </div>
+
+    <div class="stage-wrap" id="stage-wrap">
+      <div class="empty-state" id="empty-state">
+        <div class="es-icon">▦</div>
+        <div class="es-title">No videos loaded yet</div>
+        <div class="es-sub">Drop 3–4 videos above. They appear side by side and play in sync — then select two to overlay and compare.</div>
+      </div>
+
+      <!-- Grid / spread view -->
+      <div class="video-grid" id="video-grid"></div>
+
+      <!-- Overlay / compare view -->
+      <div id="comp">
+        <div id="divider">
+          <div id="div-line"></div>
+          <div id="div-knob">◀▶</div>
+        </div>
+        <div class="img-lbl" id="lbl-a">A</div>
+        <div class="img-lbl" id="lbl-b">B</div>
+        <div id="toggle-hint">click to toggle</div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ===== Transport ===== -->

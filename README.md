@@ -23,6 +23,7 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
 - **Pick / swap the compared clips** without leaving overlay: A/B dropdowns, or `[` `]` / `Shift+[` `]`.
 - **Zoom & pan** (wheel to zoom to cursor, shift-drag or right-drag to pan), **flip H/V**,
   **rotate**, **reset view**, **swap A/B**, **fullscreen**.
+- **Reference image** — toggle a panel beside the A/B comparison and drop in a still to compare against; the comparison shifts right and the reference shows on the left (lots of room for portrait clips). Overlay-only.
 - **Screenshot** the current view as a PNG — the composited overlay frame, or the whole grid layout.
 - **Flip / rotate** apply in both grid and overlay; **Save** and **Screenshot** work from either view.
 - **Save comparisons** (★ Save) to a "Saved comparisons" rail — stored locally in IndexedDB

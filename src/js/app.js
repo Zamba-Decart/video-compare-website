@@ -36,9 +36,15 @@ function updateChrome() {
   dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
   // overlay-only tools
-  [dom.swapBtn, dom.resetViewBtn].forEach((b) => { b.hidden = !overlay; });
+  [dom.swapBtn, dom.resetViewBtn, dom.referenceBtn].forEach((b) => { b.hidden = !overlay; });
   // available in BOTH grid and overlay (whenever videos are loaded)
   [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
+
+  // reference panel: overlay-only + only when toggled on
+  const refVisible = overlay && S.reference.on;
+  dom.referenceBtn.classList.toggle('is-on', S.reference.on);
+  dom.referencePanel.hidden = !refVisible;
+  dom.body.classList.toggle('reference-on', refVisible);
 
   // overlay pill availability
   dom.viewOverlayBtn.style.opacity = canOverlay() ? '1' : '0.4';
@@ -359,6 +365,42 @@ function exportCurrentView() {
   else exportGridFrame();
 }
 
+// ---------- reference image (overlay side panel) ----------
+function syncReferenceUI() {
+  const has = !!S.reference.url;
+  dom.refImg.hidden = !has;
+  dom.refDrop.hidden = has;
+  dom.refClear.hidden = !has;
+}
+
+function toggleReference() {
+  S.reference.on = !S.reference.on;
+  updateChrome();
+  if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }   // stage width changed → re-fit + re-place divider
+}
+
+function loadReferenceImage(file) {
+  if (!file || !(file.type || '').startsWith('image/')) return;
+  if (S.reference.url) URL.revokeObjectURL(S.reference.url);
+  S.reference.file = file;
+  S.reference.name = file.name;
+  S.reference.url = URL.createObjectURL(file);
+  dom.refImg.src = S.reference.url;
+  S.reference.on = true;
+  syncReferenceUI();
+  updateChrome();
+  if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }
+}
+
+function clearReferenceImage() {
+  if (S.reference.url) URL.revokeObjectURL(S.reference.url);
+  S.reference.url = null;
+  S.reference.name = null;
+  S.reference.file = null;
+  dom.refImg.removeAttribute('src');
+  syncReferenceUI();
+}
+
 function resetView() {
   S.flipH = false; S.flipV = false; S.rotation = 0;
   S.zoom = 1; S.panX = 0; S.panY = 0;
@@ -483,6 +525,11 @@ function bindToolbar() {
   dom.exportBtn.addEventListener('click', exportCurrentView);
   dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+  // reference image
+  dom.referenceBtn.addEventListener('click', toggleReference);
+  dom.referenceInput.addEventListener('change', (e) => { loadReferenceImage(e.target.files[0]); dom.referenceInput.value = ''; });
+  dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearReferenceImage(); });
 }
 
 function bindTransport() {
@@ -543,6 +590,8 @@ function clearWorkspace() {
   S.selA = null; S.selB = null; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
+  clearReferenceImage();
+  S.reference.on = false;
   showGrid();
   updateChrome();
 }
