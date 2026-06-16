@@ -164,6 +164,7 @@ function startClock() {
           seek(0);
           activeVideos().forEach((v) => v.play().catch(() => {}));
         } else {
+          seek(dur);
           pause();
           return;
         }
@@ -189,7 +190,7 @@ function startClock() {
 }
 
 function allEndedOrAtEnd(dur) {
-  return activeVideos().every((v) => v.ended || (v.currentTime >= (v.duration || dur) - 0.06));
+  return timelineVideos().every((v) => v.ended || (v.currentTime >= Math.min(v.duration || dur, dur) - 0.06));
 }
 
 function stopClock() {
