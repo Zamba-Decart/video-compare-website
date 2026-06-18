@@ -29,6 +29,19 @@ export function mountOverlay() {
   dom.comp.prepend(a.videoEl);
 }
 
+export function mountReferenceVideo() {
+  const ref = S.refVideoOn ? getSlot(S.refVideoId) : null;
+  dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
+  if (!ref) return;
+
+  ref.videoEl.style.clipPath = 'none';
+  ref.videoEl.style.opacity = '1';
+  ref.videoEl.style.transform = 'none';
+  ref.videoEl.style.transformOrigin = 'center center';
+  dom.refVideoStage.appendChild(ref.videoEl);
+  dom.refVideoLabel.textContent = stripExt(ref.name);
+}
+
 function applyTransforms(els) {
   const sx = S.flipH ? -1 : 1;
   const sy = S.flipV ? -1 : 1;
@@ -128,7 +141,9 @@ export function renderOverlay() {
 export function renderInfoBar() {
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
+  const r = S.refVideoOn ? getSlot(S.refVideoId) : null;
   const parts = [];
+  if (r) parts.push({ color: '#ffcf5a', text: `R: ${stripExt(r.name)}  ${r.w}×${r.h}` });
   if (a) parts.push({ color: 'var(--acc)', text: `A: ${stripExt(a.name)}  ${a.w}×${a.h}` });
   if (b) parts.push({ color: 'var(--acc2)', text: `B: ${stripExt(b.name)}  ${b.w}×${b.h}` });
   dom.infoList.innerHTML = parts

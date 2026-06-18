@@ -98,11 +98,12 @@ function fmtWhen(ts) {
 
 // ---- saved comparisons gallery -----------------------------------------
 // Returns true if a comparison was saved. Works from grid or overlay (needs A and B set).
-export async function saveCurrentComparison() {
+export async function saveCurrentComparison(options = {}) {
+  const silent = !!options.silent;
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
   if (!a || !b || S.selA === S.selB) {
-    window.alert('Pick two clips (assign A and B) to save a comparison.');
+    if (!silent) window.alert('Pick two clips (assign A and B) to save a comparison.');
     return false;
   }
 
@@ -110,7 +111,7 @@ export async function saveCurrentComparison() {
   const aId = await ensureBlob(a);
   const bId = await ensureBlob(b);
   if (!aId || !bId) {
-    window.alert('Couldn’t save — browser storage is unavailable or full.');
+    if (!silent) window.alert('Couldn’t save — browser storage is unavailable or full.');
     return false;
   }
   const reference = await ensureReference();   // {blobId,name} or null
@@ -136,6 +137,10 @@ export async function saveCurrentComparison() {
   });
   gcBlobs();
   return true;
+}
+
+export function saveCurrentComparisonQuietly() {
+  return saveCurrentComparison({ silent: true });
 }
 
 export async function renderSavesFromStore() {
@@ -229,6 +234,7 @@ export async function saveSessionNow() {
     if (!S.slots.length) { await safe(kvDel('session')); return; }
     const aSlot = getSlot(S.selA);
     const bSlot = getSlot(S.selB);
+    const refVideoSlot = getSlot(S.refVideoId);
     const slots = [];
     for (const s of S.slots) {
       if (gen !== wipeGen) return;          // a reset happened mid-flight — don't resurrect
@@ -240,6 +246,8 @@ export async function saveSessionNow() {
       slots,
       selA: aSlot ? slotBlobId(aSlot) : null,   // by content id, robust to skipped/deduped slots on restore
       selB: bSlot ? slotBlobId(bSlot) : null,
+      refVideoId: refVideoSlot ? slotBlobId(refVideoSlot) : null,
+      refVideoOn: !!S.refVideoOn,
       reference: refDesc ? { ...refDesc, on: S.reference.on } : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,

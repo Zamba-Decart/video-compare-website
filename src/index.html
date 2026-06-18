@@ -50,6 +50,7 @@
     <div class="ab-pickers" id="ab-pickers" hidden title="Pick which clips to compare ( [ ] cycle B · Shift+[ ] cycle A )">
       <label class="ab-pick ab-pick-a"><span>A</span><select id="pick-a"></select></label>
       <label class="ab-pick ab-pick-b"><span>B</span><select id="pick-b"></select></label>
+      <label class="ab-pick ref-video-pick" id="ref-video-pick" hidden><span>R</span><select id="pick-ref"></select></label>
     </div>
 
     <div class="d-wrap" id="d-wrap" hidden style="opacity:0.3;pointer-events:none;">
@@ -70,6 +71,7 @@
       <button class="tool-btn" id="rotate-btn" hidden>↻ Rotate</button>
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
       <button class="tool-btn" id="export-btn" hidden>⇩ Screenshot</button>
+      <button class="tool-btn" id="ref-video-btn" hidden>📌 Pin Original Video</button>
       <button class="tool-btn" id="reference-btn" hidden>🖼 Reference</button>
       <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
@@ -87,6 +89,9 @@
         <div class="dz-label">Drop reference image<br>or click to browse</div>
       </div>
       <img class="ref-img" id="ref-img" alt="reference" draggable="false" hidden>
+      <div class="ref-video-stage" id="ref-video-stage" hidden>
+        <div class="ref-video-label" id="ref-video-label">Reference</div>
+      </div>
       <div class="ref-tag">Reference</div>
       <button class="ref-clear" id="ref-clear" type="button" title="Remove reference" hidden>×</button>
     </div>

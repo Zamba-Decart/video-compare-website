@@ -14,6 +14,8 @@ export const dom = {
   abPickers: $('ab-pickers'),
   pickA: $('pick-a'),
   pickB: $('pick-b'),
+  refVideoPick: $('ref-video-pick'),
+  pickRef: $('pick-ref'),
   dWrap: $('d-wrap'),
   dRange: $('d-range'),
   dPct: $('d-pct'),
@@ -26,6 +28,7 @@ export const dom = {
   rotateBtn: $('rotate-btn'),
   resetViewBtn: $('reset-view-btn'),
   exportBtn: $('export-btn'),
+  refVideoBtn: $('ref-video-btn'),
   referenceBtn: $('reference-btn'),
   saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
@@ -40,6 +43,8 @@ export const dom = {
   referenceInput: $('reference-input'),
   refDrop: $('ref-drop'),
   refImg: $('ref-img'),
+  refVideoStage: $('ref-video-stage'),
+  refVideoLabel: $('ref-video-label'),
   refClear: $('ref-clear'),
 
   // stage

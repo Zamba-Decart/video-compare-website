@@ -24,6 +24,13 @@ Everything runs client-side. Videos never leave your machine — they're loaded 
 - **Zoom & pan** (wheel to zoom to cursor, shift-drag or right-drag to pan), **flip H/V**,
   **rotate**, **reset view**, **swap A/B**, **fullscreen**.
 - **Reference image** — toggle a panel beside the A/B comparison and drop in a still to compare against; the comparison shifts right and the reference shows on the left (lots of room for portrait clips). Overlay-only, and saved/restored with the session and with each saved comparison.
+- **Pinned reference video** — pin a third clip in the left reference panel while the two
+  output videos remain in the right-side overlay. Playback stays synced, but slider/dissolve/toggle
+  controls affect only the right-side A/B comparison. When pinned, the loop/scrub duration
+  is capped to A/B so a longer original does not keep playing after the outputs end.
+- **External dashboard imports** — the extension bridge can load videos, replace/append the
+  workspace, import a row reference image, save the outgoing A/B comparison before replace,
+  and use readable dashboard labels for clip names.
 - **Screenshot** the current view as a PNG — the composited overlay frame, or the whole grid layout.
 - **Flip / rotate** apply in both grid and overlay; **Save** and **Screenshot** work from either view.
 - **Save comparisons** (★ Save) to a "Saved comparisons" rail — stored locally in IndexedDB

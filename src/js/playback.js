@@ -10,7 +10,9 @@ let lastDrift = 0;
 // ---- active set ---------------------------------------------------------
 export function getActiveSlots() {
   if (S.view === 'overlay') {
-    return [getSlot(S.selA), getSlot(S.selB)].filter(Boolean);
+    const slots = [getSlot(S.selA), getSlot(S.selB)];
+    if (S.refVideoOn) slots.unshift(getSlot(S.refVideoId));
+    return slots.filter(Boolean).filter((slot, index, arr) => arr.findIndex((s) => s.id === slot.id) === index);
   }
   return S.slots;
 }
@@ -19,15 +21,26 @@ function activeVideos() {
   return getActiveSlots().map((s) => s.videoEl).filter(Boolean);
 }
 
+function timelineSlots() {
+  if (S.view === 'overlay' && S.refVideoOn) {
+    return [getSlot(S.selA), getSlot(S.selB)].filter(Boolean);
+  }
+  return getActiveSlots();
+}
+
+function timelineVideos() {
+  return timelineSlots().map((s) => s.videoEl).filter(Boolean);
+}
+
 function primaryVideo() {
   // master clock = the active video with the longest known duration
-  const vids = activeVideos().filter((v) => isFinite(v.duration) && v.duration > 0);
-  if (!vids.length) return activeVideos()[0] || null;
+  const vids = timelineVideos().filter((v) => isFinite(v.duration) && v.duration > 0);
+  if (!vids.length) return timelineVideos()[0] || activeVideos()[0] || null;
   return vids.reduce((a, b) => (b.duration > a.duration ? b : a));
 }
 
 export function computeDuration() {
-  S.duration = activeVideos().reduce((m, v) => Math.max(m, v.duration || 0), 0);
+  S.duration = timelineVideos().reduce((m, v) => Math.max(m, v.duration || 0), 0);
   return S.duration;
 }
 
@@ -151,6 +164,7 @@ function startClock() {
           seek(0);
           activeVideos().forEach((v) => v.play().catch(() => {}));
         } else {
+          seek(dur);
           pause();
           return;
         }
@@ -176,7 +190,7 @@ function startClock() {
 }
 
 function allEndedOrAtEnd(dur) {
-  return activeVideos().every((v) => v.ended || (v.currentTime >= (v.duration || dur) - 0.06));
+  return timelineVideos().every((v) => v.ended || (v.currentTime >= Math.min(v.duration || dur, dur) - 0.06));
 }
 
 function stopClock() {

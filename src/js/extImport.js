@@ -6,6 +6,7 @@
 
 import { S } from './state.js';
 import { addFiles, removeSlot } from './loaders.js';
+import { saveCurrentComparisonQuietly } from './saves.js';
 
 function dataUrlToBlob(dataUrl) {
   const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl || '');
@@ -47,6 +48,8 @@ function clearCurrentVideos() {
   S.slots.slice().forEach((slot) => removeSlot(slot.id));
   S.selA = null;
   S.selB = null;
+  S.refVideoId = null;
+  S.refVideoOn = false;
   S.view = 'grid';
   S.zoom = 1;
   S.panX = 0;
@@ -57,13 +60,22 @@ function clearCurrentVideos() {
   S.curTime = 0;
 }
 
-export function loadVideoFiles(videos, options = {}) {
+export async function loadVideoFiles(videos, options = {}) {
   const files = Array.from(videos || [])
     .map(descriptorToFile)
     .filter(Boolean);
 
-  if (files.length && options.mode === 'replace') clearCurrentVideos();
+  if (files.length && options.mode === 'replace') {
+    await saveCurrentComparisonQuietly();
+    clearCurrentVideos();
+  }
   if (files.length) addFiles(files);
+}
+
+function loadReferenceImage(referenceImage) {
+  const file = descriptorToFile(referenceImage, 0);
+  if (!file || !(file.type || '').startsWith('image/')) return;
+  window.dispatchEvent(new CustomEvent('LOAD_REFERENCE_IMAGE', { detail: { file } }));
 }
 
 window.addEventListener('message', (event) => {
@@ -71,7 +83,10 @@ window.addEventListener('message', (event) => {
 
   const { data } = event;
   if (!data || typeof data !== 'object') return;
-  if (data.type === 'LOAD_VIDEOS') loadVideoFiles(data.videos, { mode: data.mode || 'append' });
+  if (data.type === 'LOAD_VIDEOS') {
+    loadVideoFiles(data.videos, { mode: data.mode || 'append' })
+      .then(() => loadReferenceImage(data.referenceImage));
+  }
 });
 
 window.importVideosFromExtension = loadVideoFiles;

@@ -6,6 +6,9 @@ export const S = {
   view: 'grid',        // 'grid' | 'overlay'
   selA: null,          // slot id assigned to A
   selB: null,          // slot id assigned to B
+  refVideoId: null,    // slot id pinned in the left reference panel
+  refVideoOn: false,
+  autoPinReference: true,
 
   // overlay comparison
   mode: 'slider',      // 'slider' | 'dissolve' | 'toggle'

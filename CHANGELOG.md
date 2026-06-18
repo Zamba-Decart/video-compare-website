@@ -4,6 +4,29 @@ All notable changes to the Video Comparator are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this is a
 single-page browser tool, so "releases" map to batches of work rather than tagged builds.
 
+## [1.4.0] — 2026-06-15
+
+### Added
+- **Pinned reference video** mode: pin one loaded clip into the left reference panel while
+  A/B overlay comparison stays on the right with slider/dissolve/toggle controls.
+- **Auto pin reference** heuristic: when one loaded video has a mismatched aspect ratio and
+  two others match each other, the odd clip is pinned as the reference and the matching pair
+  is selected for overlay.
+- Extension bridge support for imported reference images via
+  `postMessage({ type: 'LOAD_VIDEOS', referenceImage })`.
+- Extension `replace` imports now quietly save the current A/B comparison to the saved rail
+  before loading the next imported row.
+
+### Changed
+- Extension imports in `replace` mode clear stale pinned-reference state before loading the
+  next row.
+- Overlay playback now syncs the pinned reference video with A/B.
+- When a pinned original/reference video is active, the loop duration is capped to the A/B
+  output videos instead of the longer original.
+- Capped looping resets the pinned original and compared outputs to `0` together.
+- A/B/R picker controls are wider and wrap so long imported names are readable.
+- The pinned video control is labeled **Pin Original Video**.
+
 ## [1.3.0] — 2026-06-15
 
 ### Added
