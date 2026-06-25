@@ -18,7 +18,7 @@ SRC = ROOT / "src"
 JS = SRC / "js"
 
 # dependency order: leaves first, app last (each module's __m_<name> must exist before use)
-MODULE_ORDER = ["helpers", "state", "dom", "storage", "loaders", "playback", "viewer", "grid", "export", "saves", "extImport", "app"]
+MODULE_ORDER = ["helpers", "state", "dom", "storage", "loaders", "playback", "viewer", "grid", "export", "saves", "share", "extImport", "app"]
 
 IMPORT_RE = re.compile(r"""import\s*\{([^}]*)\}\s*from\s*['"]\./([\w.]+)\.js['"];?""", re.DOTALL)
 EXPORT_DECL_RE = re.compile(r"""^export\s+(async\s+function|function|const|let|class)\s+(\w+)""", re.MULTILINE)
@@ -75,13 +75,21 @@ def main():
     # other module <script src> tags are folded into the single bundle below — drop their tags
     html = re.sub(r'\s*<script type="module" src="\./js/(?!app\.js)[\w.]+\.js"></script>', "", html)
 
-    # inline CSS
+    # inline CSS. Use a lambda replacement (not a string) so backslashes in the source
+    # (e.g. CSS \2014 escapes, JS regex \s \d \w) aren't interpreted as re replacement escapes.
     html = re.sub(r'<link rel="stylesheet" href="\./css/styles\.css">',
-                  f"<style>\n{css}\n</style>", html)
+                  lambda _m: f"<style>\n{css}\n</style>", html)
 
-    # inline the module bundle as one plain script (no imports => no module/fetch needed)
+    # inline the vendored JSZip (a non-module global lib). Use a literal str.replace, NOT
+    # re.sub — the minified source contains \d, \w, \1 etc. that re.sub would mis-handle.
+    jszip = (JS / "vendor" / "jszip.min.js").read_text()
+    html = html.replace('<script src="./js/vendor/jszip.min.js"></script>',
+                        f"<script>\n{jszip}\n</script>")
+
+    # inline the module bundle as one plain script (no imports => no module/fetch needed).
+    # lambda replacement: bundle JS contains regex escapes (\s \d \w) that a string repl would break.
     html = re.sub(r'<script type="module" src="\./js/app\.js"></script>',
-                  f"<script>\n{bundle}\n</script>", html)
+                  lambda _m: f"<script>\n{bundle}\n</script>", html)
 
     # embed favicons / logo as data URIs so the file is fully portable
     for size in (32, 180, 512):
