@@ -72,10 +72,11 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 
 ---
 
-## Phase 4 — Sharing a session / saved videos  · **L**
+## Phase 4 — Sharing a session / saved videos  ✅ shipped (PR #6)
 
-### #1 — Share the workspace *with the videos*
-- **Goal:** hand someone a single artifact (zip / file / link) that reopens with the same loaded videos + saved comparisons + reference, since the JSON alone isn't enough — the (small) videos must travel too.
+### #1 — Share the workspace *with the videos*  · **DONE**
+- **Shipped:** ⤓ Save workspace / ⤒ Load workspace buttons in the header export/import a portable `.zip` (vendored JSZip) — `manifest.json` (current session + **all** saved comparisons) + `media/` (every video & reference blob, deduped). Plain download named `<your-name>_video_comparator.zip`; import merges saved comparisons (union by id) and adopts the bundled workspace, then reloads to restore. Dropping a `.zip` on the app also loads it. No hosting — download + manual share.
+- **Goal (original):** hand someone a single artifact (zip / file / link) that reopens with the same loaded videos + saved comparisons + reference, since the JSON alone isn't enough — the (small) videos must travel too.
 - **Recommended: a portable ZIP bundle** (`*.vcbundle.zip`)
   - **Contents:** `manifest.json` (the session + saved-comparison metadata: clips by filename, A/B/reference selections, modes/positions/transforms) + `media/` (each unique video + reference image, stored once, keyed by the existing `blobId`).
   - **Export:** "⇪ Export bundle" → collect the loaded slots' files + reference + (optionally) every saved comparison's videos → zip → download. Scope toggle: *workspace only* vs *+ all saved comparisons* (decision #1).
@@ -113,8 +114,8 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 1. ~~**Phase 1** (#5, #7, #8, #4)~~ — ✅ shipped (PR #2).
 2. ~~**Phase 2** (#2, #3)~~ — ✅ shipped (PR #3); auto-pin later removed entirely.
 3. ~~**Phase 3** (#6)~~ — ✅ shipped (PR #4).
-4. **Phase 4** (#1) — sharing (the first "big" feature; pick the format first). ← **next**
-5. **Phase 5** (#9) — the extension, last, after a short design pass on the popup vs overlay UX.
+4. ~~**Phase 4** (#1)~~ — ✅ shipped (PR #6): portable `.zip` workspace bundles (full mirror, plain download).
+5. **Phase 5** (#9) — the extension, last, after a short design pass on the popup vs overlay UX. ← **only item left**
 
 Workflow: small batches per phase on `main` (or short feature branches → PR), rebuild the
 standalone (`tools/build-standalone.py`) and verify in-browser before each push.

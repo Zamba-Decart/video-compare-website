@@ -14,8 +14,9 @@ import { exportCurrentFrame, exportGridFrame } from './export.js';
 import { stripExt } from './helpers.js';
 import {
   initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow,
-  restoreSession, renderSavesFromStore, invalidateSession,
+  restoreSession, renderSavesFromStore, invalidateSession, cancelSessionSave,
 } from './saves.js';
+import { exportWorkspace, importWorkspaceToStorage } from './share.js';
 
 let restoreSeekTime = null;   // one-shot: seek to a restored session's saved time once metadata loads
 
@@ -677,6 +678,36 @@ function bindSavesPanel() {
   });
 }
 
+// ---------- workspace bundles (export / import a .zip) -------------------
+async function exportWorkspaceBundle() {
+  const a = getSlot(S.selA), b = getSlot(S.selB);
+  let def = 'workspace';
+  if (a && b) def = `${stripExt(a.name)}_vs_${stripExt(b.name)}`;
+  else if (S.slots[0]) def = stripExt(S.slots[0].name);
+  const name = window.prompt('Name this workspace bundle:', def);
+  if (name === null) return;   // cancelled
+  try {
+    const filename = await exportWorkspace(name);
+    if (!filename) window.alert('Nothing to export yet — load some videos or save a comparison first.');
+  } catch (e) {
+    window.alert('Export failed: ' + (e && e.message ? e.message : 'unknown error'));
+  }
+}
+
+// Import writes everything to storage, then we reload so init() restores cleanly from it
+// (avoids racing the live workspace auto-save against the freshly-imported session).
+async function loadBundleFile(file) {
+  if (!file) return;
+  try {
+    invalidateSession();   // any pending/in-flight workspace save now bails — don't clobber the import
+    cancelSessionSave();
+    await importWorkspaceToStorage(file);
+    window.location.reload();
+  } catch (e) {
+    window.alert('Couldn\'t load that file: ' + (e && e.message ? e.message : 'invalid bundle'));
+  }
+}
+
 function bindTransport() {
   dom.playBtn.addEventListener('click', togglePlay);
   dom.frameBackBtn.addEventListener('click', () => frameStep(-1));
@@ -765,7 +796,7 @@ function bindResizeTracking() {
 }
 
 async function init() {
-  initLoaders({ onChange: onSlotsChanged, onMeta, onReferenceImage: loadReferenceImage });
+  initLoaders({ onChange: onSlotsChanged, onMeta, onReferenceImage: loadReferenceImage, onBundle: loadBundleFile });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
   initSaves({ onApply: applyRestoredComparison, onApplySession: applyRestoredSession });
   bindToolbar();
@@ -777,6 +808,9 @@ async function init() {
   bindFullscreenTracking();
   bindResizeTracking();
   dom.headerResetBtn.addEventListener('click', resetAll);
+  dom.exportWsBtn.addEventListener('click', exportWorkspaceBundle);
+  dom.loadWsBtn.addEventListener('click', () => dom.wsFileInput.click());
+  dom.wsFileInput.addEventListener('change', (e) => { loadBundleFile(e.target.files[0]); dom.wsFileInput.value = ''; });
 
   // flush the session before the tab is hidden/closed (debounce may not have fired)
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSessionNow(); });

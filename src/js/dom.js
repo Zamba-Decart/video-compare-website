@@ -84,4 +84,7 @@ export const dom = {
   shortcutsClose: $('shortcuts-close'),
 
   headerResetBtn: $('header-reset-btn'),
+  exportWsBtn: $('export-ws-btn'),
+  loadWsBtn: $('load-ws-btn'),
+  wsFileInput: $('ws-file-input'),
 };

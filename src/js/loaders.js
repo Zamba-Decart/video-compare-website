@@ -5,11 +5,13 @@ import { nextId } from './helpers.js';
 let onChange = () => {};
 let onMeta = () => {};
 let onReferenceImage = () => {};
+let onBundle = () => {};
 
 export function initLoaders(handlers = {}) {
   onChange = handlers.onChange || onChange;
   onMeta = handlers.onMeta || onMeta;
   onReferenceImage = handlers.onReferenceImage || onReferenceImage;
+  onBundle = handlers.onBundle || onBundle;
 
   // file picker
   dom.fileInput.addEventListener('change', (e) => {
@@ -82,6 +84,11 @@ function makeSlot(blob, name, blobId) {
 
 export function addFiles(fileList) {
   const all = Array.from(fileList || []);
+
+  // A .zip is a workspace bundle, not media — hand it off to the importer and stop.
+  const bundle = all.find((f) => /\.zip$/i.test(f.name) || f.type === 'application/zip');
+  if (bundle) { onBundle(bundle); return; }
+
   const videos = all.filter((f) => f.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(f.name));
   const images = all.filter((f) => f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name));
   if (!videos.length && !images.length) return;
