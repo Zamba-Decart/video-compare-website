@@ -2171,6 +2171,22 @@ async function restoreSave(id) {
   const saves = (await safe(kvGet('saves'), [])) || [];
   const rec = saves.find((r) => r.id === id);
   if (!rec || !onApply) return;
+
+  // Verify the saved clips' bytes are in storage BEFORE touching the workspace, so a genuinely
+  // missing save doesn't tear down what's currently loaded.
+  const present = new Set((await safe(listBlobIds(), [])) || []);
+  if (!present.has(rec.a && rec.a.blobId) || !present.has(rec.b && rec.b.blobId)) {
+    window.alert('Could not restore — the saved video data is missing.');
+    return;
+  }
+
+  // Restoring opens the comparison FRESH, so clear the current workspace first. Otherwise the
+  // saved clips load on top of whatever's already loaded and hit the MAX_SLOTS (4) cap —
+  // addBlobSlot then returns null for the overflow clip, which we'd misreport as "data missing".
+  // A normal save auto-clears the workspace; an imported session leaves it populated, which is
+  // what exposed this (older saves whose clips weren't already loaded failed to restore).
+  S.slots.slice().forEach((s) => removeSlot(s.id));
+
   const a = await loadClipSlot(rec.a);
   const b = await loadClipSlot(rec.b);
   if (!a.slot || !b.slot) {
