@@ -44,6 +44,10 @@ function updateChrome() {
   // *upload* must always be reachable (grid uploads, overlay shows the panel).
   [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.referenceBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
 
+  // auto-pin toggle: shown only with 3+ clips (the only case where the heuristic can act)
+  dom.autoPinBtn.hidden = S.slots.length < 3;
+  dom.autoPinBtn.classList.toggle('is-on', S.autoPinReference);
+
   // reference panel: overlay-only + only when toggled on
   const refVideoVisible = overlay && S.refVideoOn && getSlot(S.refVideoId);
   const refImageVisible = overlay && S.reference.on;
@@ -264,6 +268,33 @@ function autoPinMismatchedReference() {
     }
   }
   return false;
+}
+
+// Auto-pin is an opt-in preference (off by default), persisted across sessions/workspaces.
+const AUTOPIN_KEY = 'vc.autoPinReference';
+function loadAutoPinPref() {
+  try { S.autoPinReference = localStorage.getItem(AUTOPIN_KEY) === '1'; } catch (e) { /* storage unavailable */ }
+}
+function setAutoPinPref(on) {
+  S.autoPinReference = on;
+  try { localStorage.setItem(AUTOPIN_KEY, on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+}
+
+// Toggle from the 🎯 Auto-pin button. Turning it ON re-evaluates the current clips
+// immediately (so a loaded odd-one-out gets pinned without a reload); turning it OFF
+// just stops future auto-pinning and leaves any current pin in place.
+function toggleAutoPin() {
+  setAutoPinPref(!S.autoPinReference);
+  if (S.autoPinReference && autoPinMismatchedReference()) {
+    if (canOverlay()) showOverlay(); else renderGrid();
+    computeDuration();
+    updateDurationDisplay();
+    syncActive();
+    renderInfoBar();
+    renderPickers();
+    scheduleSessionSave();
+  }
+  updateChrome();
 }
 
 // Apply the overlay state (mode / positions / transforms) from a record onto S + UI.
@@ -647,6 +678,7 @@ function bindToolbar() {
   dom.resetViewBtn.addEventListener('click', resetView);
   dom.exportBtn.addEventListener('click', exportCurrentView);
   dom.refVideoBtn.addEventListener('click', toggleRefVideo);
+  dom.autoPinBtn.addEventListener('click', toggleAutoPin);
   dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 
@@ -758,7 +790,8 @@ function bindResizeTracking() {
 }
 
 async function init() {
-  initLoaders({ onChange: onSlotsChanged, onMeta });
+  loadAutoPinPref();
+  initLoaders({ onChange: onSlotsChanged, onMeta, onReferenceImage: loadReferenceImage });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
   initSaves({ onApply: applyRestoredComparison, onApplySession: applyRestoredSession });
   bindToolbar();
