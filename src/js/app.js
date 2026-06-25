@@ -702,6 +702,47 @@ function bindShortcuts() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !dom.shortcutsModal.hidden) close(); });
 }
 
+// ---------- saved panel: collapse + dock (persisted per browser) ---------
+const SAVES_COLLAPSED_KEY = 'vc.savesCollapsed';
+const SAVES_DOCK_KEY = 'vc.savesDock';
+
+function applySavesCollapsed(collapsed) {
+  dom.body.classList.toggle('saves-collapsed', collapsed);
+  dom.savesCollapseBtn.textContent = collapsed ? '▸' : '▾';
+  dom.savesCollapseBtn.title = collapsed ? 'Expand saved comparisons' : 'Collapse saved comparisons';
+  dom.savesCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
+}
+
+function applySavesDock(right) {
+  dom.mainEl.classList.toggle('saves-dock-right', right);
+  dom.savesDockBtn.classList.toggle('is-on', right);
+  dom.savesDockBtn.title = right ? 'Dock to the bottom' : 'Dock to the right';
+}
+
+function loadSavesPanelPrefs() {
+  let collapsed = false, right = false;
+  try {
+    collapsed = localStorage.getItem(SAVES_COLLAPSED_KEY) === '1';
+    right = localStorage.getItem(SAVES_DOCK_KEY) === 'right';
+  } catch (e) { /* storage unavailable */ }
+  applySavesCollapsed(collapsed);
+  applySavesDock(right);
+}
+
+function bindSavesPanel() {
+  dom.savesCollapseBtn.addEventListener('click', () => {
+    const collapsed = !dom.body.classList.contains('saves-collapsed');
+    applySavesCollapsed(collapsed);
+    try { localStorage.setItem(SAVES_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) { /* ignore */ }
+  });
+  dom.savesDockBtn.addEventListener('click', () => {
+    const right = !dom.mainEl.classList.contains('saves-dock-right');
+    applySavesDock(right);
+    try { localStorage.setItem(SAVES_DOCK_KEY, right ? 'right' : 'bottom'); } catch (e) { /* ignore */ }
+    if (S.view === 'overlay') renderOverlay();   // stage width changed → re-fit the divider
+  });
+}
+
 function bindTransport() {
   dom.playBtn.addEventListener('click', togglePlay);
   dom.frameBackBtn.addEventListener('click', () => frameStep(-1));
@@ -797,6 +838,7 @@ async function init() {
   bindToolbar();
   bindTransport();
   bindShortcuts();
+  bindSavesPanel();
   bindOverlayInteraction();
   bindKeyboard();
   bindFullscreenTracking();
@@ -810,6 +852,7 @@ async function init() {
   // initial UI state
   dom.fpsInput.value = String(S.fps);
   dom.rateSelect.value = String(S.rate);
+  loadSavesPanelPrefs();
   updateOptionButtons();
   updatePlayButton();
   updateChrome();

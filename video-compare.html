@@ -87,6 +87,26 @@ header {
   flex-direction: column;
   gap: 16px;
 }
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;   /* allow the content column to shrink when the saved panel docks right */
+}
+
+/* Saved panel docked to the right: two columns (content | saved sidebar). */
+.main.saves-dock-right { flex-direction: row; align-items: flex-start; }
+.main.saves-dock-right .main-content { flex: 1 1 auto; }
+.main.saves-dock-right .saves-rail { flex: 0 0 290px; width: 290px; align-self: stretch; }
+.main.saves-dock-right .saves-list {
+  flex-direction: column; overflow-x: hidden; overflow-y: auto;
+  max-height: calc(100vh - 220px);
+}
+.main.saves-dock-right .save-card { width: 100%; }
+.main.saves-dock-right .saves-hint { display: none; }   /* tight sidebar — drop the hint, cards are clearly clickable */
+
+/* Collapsed: hide the cards, keep the header (so it can be re-expanded). */
+body.saves-collapsed .saves-list { display: none; }
 
 /* ===== Dropzone ===== */
 .dropzone {
@@ -623,11 +643,30 @@ body.reference-on .stage-row > .stage-wrap {
   display: flex; flex-direction: column; gap: 10px;
 }
 .saves-head {
+  display: flex; align-items: center; gap: 8px;
   font-family: 'Space Mono', monospace;
   font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--acc);
 }
-.saves-head span { color: var(--muted); letter-spacing: 0.04em; text-transform: none; }
+.saves-hint { color: var(--muted); letter-spacing: 0.04em; text-transform: none; }
+.saves-actions { margin-left: auto; display: flex; gap: 6px; }
+.saves-act {
+  width: 24px; height: 24px; border-radius: 7px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surf2); border: 1px solid var(--border); color: var(--muted);
+  cursor: pointer; font-size: 12px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.saves-act:hover { border-color: var(--border2); color: var(--text); }
+.saves-act.is-on { border-color: rgba(200,240,60,0.35); background: var(--acc-dim); color: var(--acc); }
+
+/* On narrow screens, force the bottom layout even if 'dock right' is remembered. */
+@media (max-width: 720px) {
+  .main.saves-dock-right { flex-direction: column; }
+  .main.saves-dock-right .saves-rail { flex: none; width: auto; }
+  .main.saves-dock-right .saves-list { flex-direction: row; overflow-x: auto; max-height: none; }
+  .main.saves-dock-right .save-card { width: 150px; }
+}
 .saves-list {
   display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
 }
@@ -698,7 +737,8 @@ body.is-fullscreen .stage-wrap {
   </div>
 </header>
 
-<div class="main">
+<div class="main" id="main">
+  <div class="main-content" id="main-content">
 
   <!-- ===== Upload ===== -->
   <div class="dropzone" id="dz" tabindex="0">
@@ -858,9 +898,18 @@ body.is-fullscreen .stage-wrap {
     </div>
   </div>
 
+  </div><!-- /.main-content -->
+
   <!-- ===== Saved comparisons ===== -->
   <div class="saves-rail" id="saves-rail" hidden>
-    <div class="saves-head">Saved comparisons <span>· click to restore</span></div>
+    <div class="saves-head">
+      <span class="saves-title">Saved comparisons</span>
+      <span class="saves-hint">· click to restore</span>
+      <div class="saves-actions">
+        <button class="saves-act" id="saves-dock-btn" type="button" title="Dock to the right" aria-label="Dock saved panel to the right">⬓</button>
+        <button class="saves-act" id="saves-collapse-btn" type="button" title="Collapse" aria-label="Collapse saved panel" aria-expanded="true">▾</button>
+      </div>
+    </div>
     <div class="saves-list" id="saves-list"></div>
   </div>
 
@@ -1004,9 +1053,14 @@ const dom = {
   saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
 
+  // layout
+  mainEl: $('main'),
+
   // saved comparisons
   savesRail: $('saves-rail'),
   savesList: $('saves-list'),
+  savesCollapseBtn: $('saves-collapse-btn'),
+  savesDockBtn: $('saves-dock-btn'),
 
   // reference panel
   stageRow: $('stage-row'),
@@ -3007,6 +3061,47 @@ function bindShortcuts() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !dom.shortcutsModal.hidden) close(); });
 }
 
+// ---------- saved panel: collapse + dock (persisted per browser) ---------
+const SAVES_COLLAPSED_KEY = 'vc.savesCollapsed';
+const SAVES_DOCK_KEY = 'vc.savesDock';
+
+function applySavesCollapsed(collapsed) {
+  dom.body.classList.toggle('saves-collapsed', collapsed);
+  dom.savesCollapseBtn.textContent = collapsed ? '▸' : '▾';
+  dom.savesCollapseBtn.title = collapsed ? 'Expand saved comparisons' : 'Collapse saved comparisons';
+  dom.savesCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
+}
+
+function applySavesDock(right) {
+  dom.mainEl.classList.toggle('saves-dock-right', right);
+  dom.savesDockBtn.classList.toggle('is-on', right);
+  dom.savesDockBtn.title = right ? 'Dock to the bottom' : 'Dock to the right';
+}
+
+function loadSavesPanelPrefs() {
+  let collapsed = false, right = false;
+  try {
+    collapsed = localStorage.getItem(SAVES_COLLAPSED_KEY) === '1';
+    right = localStorage.getItem(SAVES_DOCK_KEY) === 'right';
+  } catch (e) { /* storage unavailable */ }
+  applySavesCollapsed(collapsed);
+  applySavesDock(right);
+}
+
+function bindSavesPanel() {
+  dom.savesCollapseBtn.addEventListener('click', () => {
+    const collapsed = !dom.body.classList.contains('saves-collapsed');
+    applySavesCollapsed(collapsed);
+    try { localStorage.setItem(SAVES_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) { /* ignore */ }
+  });
+  dom.savesDockBtn.addEventListener('click', () => {
+    const right = !dom.mainEl.classList.contains('saves-dock-right');
+    applySavesDock(right);
+    try { localStorage.setItem(SAVES_DOCK_KEY, right ? 'right' : 'bottom'); } catch (e) { /* ignore */ }
+    if (S.view === 'overlay') renderOverlay();   // stage width changed → re-fit the divider
+  });
+}
+
 function bindTransport() {
   dom.playBtn.addEventListener('click', togglePlay);
   dom.frameBackBtn.addEventListener('click', () => frameStep(-1));
@@ -3102,6 +3197,7 @@ async function init() {
   bindToolbar();
   bindTransport();
   bindShortcuts();
+  bindSavesPanel();
   bindOverlayInteraction();
   bindKeyboard();
   bindFullscreenTracking();
@@ -3115,6 +3211,7 @@ async function init() {
   // initial UI state
   dom.fpsInput.value = String(S.fps);
   dom.rateSelect.value = String(S.rate);
+  loadSavesPanelPrefs();
   updateOptionButtons();
   updatePlayButton();
   updateChrome();
