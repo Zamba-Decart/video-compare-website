@@ -22,7 +22,7 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 
 ---
 
-## Phase 1 — Quick UI fixes (low risk, all on `main`)
+## Phase 1 — Quick UI fixes  ✅ shipped (PR #2)
 
 ### #5 — Slimmer transport bar  · **S**
 - **What:** the play/scrub/loop/autoplay/mute row takes too much vertical space.
@@ -47,7 +47,7 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 
 ---
 
-## Phase 2 — Reference intake & behavior
+## Phase 2 — Reference intake & behavior  ✅ shipped (PR #3)
 
 ### #2 — Auto-detect a dropped image as the reference  · **M**
 - **What:** dropping e.g. 3 videos + 1 image should auto-assign the image as the reference (by file type), no extra click.
@@ -55,15 +55,13 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 - **Touches:** `loaders.js` (`addFiles` splits by MIME), `app.js` (route image → reference), `index.html` (dropzone `accept`).
 - **Edge:** multiple images → use the first, ignore/queue the rest (note in UI).
 
-### #3 — Reference *video* is manual, not auto-detected  · **S–M**
-- **What:** stop auto-pinning a video as the reference on load; the user explicitly assigns one (R picker / "Pin Original Video").
-- **How:** default `autoPinReference` to `false` (or remove the on-load heuristic in `app.js`); keep the manual pin controls. If we keep auto-pin at all, make it an off-by-default toggle (decision #3).
-- **Touches:** `state.js` (default), `app.js` (auto-pin call site).
-- **Note:** this tunes the just-merged pinned-reference feature — quick but verify it doesn't regress the manual flow.
+### #3 — Reference *video* is manual, not auto-detected  · **DONE**
+- **What:** the reference video is now assigned only by the user (R picker / "Pin Original Video").
+- **Resolution:** the auto-pin heuristic was first made an off-by-default toggle (PR #3), then **removed entirely** (decision #3) — no `autoPinReference` state, no toggle button, no on-load heuristic. The manual pin controls are all that remain.
 
 ---
 
-## Phase 3 — Saved panel UX
+## Phase 3 — Saved panel UX  ✅ shipped (PR #4)
 
 ### #6 — Collapsible saved panel + dock to the right  · **M**
 - **What:** let the "Saved comparisons" rail collapse (hide / expand) and optionally move to a right-side dock instead of the bottom.
@@ -112,10 +110,10 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 
 ## Suggested order
 
-1. **Phase 1** (#5, #7, #8, #4) — fast, visible polish; do these first.
-2. **Phase 2** (#2, #3) — finish the reference UX so intake is intuitive.
-3. **Phase 3** (#6) — saved-panel ergonomics.
-4. **Phase 4** (#1) — sharing (the first "big" feature; pick the format first).
+1. ~~**Phase 1** (#5, #7, #8, #4)~~ — ✅ shipped (PR #2).
+2. ~~**Phase 2** (#2, #3)~~ — ✅ shipped (PR #3); auto-pin later removed entirely.
+3. ~~**Phase 3** (#6)~~ — ✅ shipped (PR #4).
+4. **Phase 4** (#1) — sharing (the first "big" feature; pick the format first). ← **next**
 5. **Phase 5** (#9) — the extension, last, after a short design pass on the popup vs overlay UX.
 
 Workflow: small batches per phase on `main` (or short feature branches → PR), rebuild the
