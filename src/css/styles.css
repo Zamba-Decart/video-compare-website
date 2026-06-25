@@ -461,16 +461,16 @@ body.reference-on .stage-row > .stage-wrap {
 
 /* ===== Transport bar ===== */
 .transport-bar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px;
   background: var(--surf);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   flex-wrap: wrap;
 }
 .t-ctl {
-  font-size: 14px;
-  width: 36px; height: 36px; border-radius: 8px;
+  font-size: 13px;
+  width: 28px; height: 28px; border-radius: 7px;
   background: var(--surf2); border: 1px solid var(--border);
   color: var(--text); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -499,11 +499,11 @@ body.reference-on .stage-row > .stage-wrap {
   width: 15px; height: 15px; border-radius: 50%;
   background: var(--acc); cursor: pointer; border: 2px solid var(--bg);
 }
-.t-divider { width: 1px; height: 26px; background: var(--border2); margin: 0 2px; }
+.t-divider { width: 1px; height: 18px; background: var(--border2); margin: 0 2px; }
 .t-toggle {
   font-family: 'Space Mono', monospace;
   font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
-  padding: 7px 12px; border-radius: 8px;
+  padding: 5px 10px; border-radius: 7px;
   background: var(--surf2); border: 1px solid var(--border);
   color: var(--muted); cursor: pointer;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
@@ -515,7 +515,7 @@ body.reference-on .stage-row > .stage-wrap {
 }
 .t-rate {
   font-family: 'Space Mono', monospace;
-  font-size: 10px; padding: 7px 8px; border-radius: 8px;
+  font-size: 10px; padding: 5px 7px; border-radius: 7px;
   background: var(--surf2); border: 1px solid var(--border);
   color: var(--text); cursor: pointer;
 }
@@ -526,7 +526,7 @@ body.reference-on .stage-row > .stage-wrap {
   color: var(--muted);
 }
 .t-fps input {
-  width: 48px; padding: 6px 6px; border-radius: 7px;
+  width: 44px; padding: 4px 6px; border-radius: 6px;
   background: var(--surf2); border: 1px solid var(--border);
   color: var(--text); font-family: 'Space Mono', monospace; font-size: 11px;
 }
@@ -557,6 +557,48 @@ body.reference-on .stage-row > .stage-wrap {
   border-radius: 4px; font-size: 9px; letter-spacing: 0.1em;
   color: var(--muted); margin: 0 4px 0 10px;
 }
+
+/* Shortcuts button + popover */
+.info-btn {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 5px 12px; border-radius: 7px;
+  background: var(--surf2); border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer;
+  transition: border-color 0.14s, color 0.14s;
+}
+.info-btn:hover { border-color: var(--border2); color: var(--text); }
+.shortcuts-modal {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(2px);
+}
+.shortcuts-card {
+  background: var(--surf); border: 1px solid var(--border2);
+  border-radius: 14px; padding: 16px 18px;
+  width: min(92%, 460px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.shortcuts-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--acc); margin-bottom: 12px;
+}
+.shortcuts-close {
+  width: 24px; height: 24px; border-radius: 999px; line-height: 1;
+  background: var(--surf2); border: 1px solid var(--border); color: var(--text);
+  cursor: pointer; font-size: 15px;
+}
+.shortcuts-close:hover { border-color: var(--border2); }
+.shortcuts-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 9px 18px;
+  font-size: 12px; color: var(--text);
+}
+.shortcuts-grid div { display: flex; align-items: center; gap: 6px; }
+.shortcuts-grid em { color: var(--muted); font-style: normal; font-size: 11px; }
+.shortcuts-grid .kbd { margin: 0; flex-shrink: 0; }
+@media (max-width: 520px) { .shortcuts-grid { grid-template-columns: 1fr; } }
 
 /* ===== Saved comparisons rail ===== */
 .saves-rail {
