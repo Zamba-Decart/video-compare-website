@@ -4,10 +4,12 @@ import { nextId } from './helpers.js';
 
 let onChange = () => {};
 let onMeta = () => {};
+let onReferenceImage = () => {};
 
 export function initLoaders(handlers = {}) {
   onChange = handlers.onChange || onChange;
   onMeta = handlers.onMeta || onMeta;
+  onReferenceImage = handlers.onReferenceImage || onReferenceImage;
 
   // file picker
   dom.fileInput.addEventListener('change', (e) => {
@@ -79,11 +81,13 @@ function makeSlot(blob, name, blobId) {
 }
 
 export function addFiles(fileList) {
-  const files = Array.from(fileList || []).filter((f) => f.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(f.name));
-  if (!files.length) return;
+  const all = Array.from(fileList || []);
+  const videos = all.filter((f) => f.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(f.name));
+  const images = all.filter((f) => f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name));
+  if (!videos.length && !images.length) return;
 
   let added = 0;
-  for (const file of files) {
+  for (const file of videos) {
     if (S.slots.length >= MAX_SLOTS) {
       // eslint-disable-next-line no-alert
       window.alert(`Up to ${MAX_SLOTS} videos at a time. Remove one to add more.`);
@@ -94,6 +98,10 @@ export function addFiles(fileList) {
   }
 
   if (added) onChange();
+
+  // A dropped/picked image is intake for the reference panel, not a comparison slot.
+  // Use the first one; extra images in the same drop are ignored.
+  if (images.length) onReferenceImage(images[0]);
 }
 
 // Restore a clip from a stored blob (used by saved-comparison / session restore).

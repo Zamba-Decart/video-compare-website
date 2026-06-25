@@ -26,11 +26,12 @@
 
   <!-- ===== Upload ===== -->
   <div class="dropzone" id="dz" tabindex="0">
-    <input type="file" accept="video/*" id="file-input" multiple>
+    <input type="file" accept="video/*,image/*" id="file-input" multiple>
     <div class="dz-inner" id="dz-inner">
       <div class="dz-icon">↑</div>
       <div class="dz-label">Drop up to 4 videos here<br>or click to browse</div>
       <span class="dz-tag">mp4 · webm · mov</span>
+      <span class="dz-hint">＋ drop an image to set it as the reference</span>
     </div>
   </div>
 
@@ -72,6 +73,7 @@
       <button class="tool-btn" id="reset-view-btn" hidden>Reset view</button>
       <button class="tool-btn" id="export-btn" hidden>⇩ Screenshot</button>
       <button class="tool-btn" id="ref-video-btn" hidden>📌 Pin Original Video</button>
+      <button class="tool-btn" id="auto-pin-btn" hidden title="When 3+ clips are loaded, auto-pin the odd-sized one as the reference video">🎯 Auto-pin</button>
       <button class="tool-btn" id="reference-btn" hidden>🖼 Reference</button>
       <button class="tool-btn" id="save-btn" hidden>★ Save</button>
       <button class="tool-btn" id="fullscreen-btn">⛶ Fullscreen</button>
