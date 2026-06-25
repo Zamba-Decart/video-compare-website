@@ -29,7 +29,6 @@ export const dom = {
   resetViewBtn: $('reset-view-btn'),
   exportBtn: $('export-btn'),
   refVideoBtn: $('ref-video-btn'),
-  autoPinBtn: $('auto-pin-btn'),
   referenceBtn: $('reference-btn'),
   saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),

@@ -8,7 +8,6 @@ export const S = {
   selB: null,          // slot id assigned to B
   refVideoId: null,    // slot id pinned in the left reference panel
   refVideoOn: false,
-  autoPinReference: false,   // off by default; opt-in via the 🎯 Auto-pin toggle (persisted in localStorage)
 
   // overlay comparison
   mode: 'slider',      // 'slider' | 'dissolve' | 'toggle'

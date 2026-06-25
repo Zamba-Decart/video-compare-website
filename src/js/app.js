@@ -44,10 +44,6 @@ function updateChrome() {
   // *upload* must always be reachable (grid uploads, overlay shows the panel).
   [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.referenceBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
 
-  // auto-pin toggle: shown only with 3+ clips (the only case where the heuristic can act)
-  dom.autoPinBtn.hidden = S.slots.length < 3;
-  dom.autoPinBtn.classList.toggle('is-on', S.autoPinReference);
-
   // reference panel: overlay-only + only when toggled on
   const refVideoVisible = overlay && S.refVideoOn && getSlot(S.refVideoId);
   const refImageVisible = overlay && S.reference.on;
@@ -240,63 +236,6 @@ function toggleRefVideo() {
   if (next) setRefVideo(next.id, true);
 }
 
-function aspect(slot) {
-  return slot?.w && slot?.h ? slot.w / slot.h : null;
-}
-
-function dimensionsClose(a, b) {
-  const arA = aspect(a);
-  const arB = aspect(b);
-  if (!arA || !arB) return false;
-  return Math.abs(arA - arB) / Math.max(arA, arB) < 0.02;
-}
-
-function autoPinMismatchedReference() {
-  if (!S.autoPinReference || S.refVideoOn || S.slots.length < 3) return false;
-  const ready = S.slots.filter((s) => s.ready && s.w && s.h);
-  if (ready.length < 3) return false;
-
-  for (const candidate of ready) {
-    const others = ready.filter((s) => s.id !== candidate.id);
-    if (others.length >= 2 && dimensionsClose(others[0], others[1]) && !dimensionsClose(candidate, others[0])) {
-      S.selA = others[0].id;
-      S.selB = others[1].id;
-      S.refVideoId = candidate.id;
-      S.refVideoOn = true;
-      if (S.view !== 'overlay') S.view = 'overlay';
-      return true;
-    }
-  }
-  return false;
-}
-
-// Auto-pin is an opt-in preference (off by default), persisted across sessions/workspaces.
-const AUTOPIN_KEY = 'vc.autoPinReference';
-function loadAutoPinPref() {
-  try { S.autoPinReference = localStorage.getItem(AUTOPIN_KEY) === '1'; } catch (e) { /* storage unavailable */ }
-}
-function setAutoPinPref(on) {
-  S.autoPinReference = on;
-  try { localStorage.setItem(AUTOPIN_KEY, on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
-}
-
-// Toggle from the 🎯 Auto-pin button. Turning it ON re-evaluates the current clips
-// immediately (so a loaded odd-one-out gets pinned without a reload); turning it OFF
-// just stops future auto-pinning and leaves any current pin in place.
-function toggleAutoPin() {
-  setAutoPinPref(!S.autoPinReference);
-  if (S.autoPinReference && autoPinMismatchedReference()) {
-    if (canOverlay()) showOverlay(); else renderGrid();
-    computeDuration();
-    updateDurationDisplay();
-    syncActive();
-    renderInfoBar();
-    renderPickers();
-    scheduleSessionSave();
-  }
-  updateChrome();
-}
-
 // Apply the overlay state (mode / positions / transforms) from a record onto S + UI.
 function applyViewState(rec) {
   S.mode = rec.mode || 'slider';
@@ -385,10 +324,8 @@ function autoAssign() {
 // ---------- slot lifecycle ----------------------------------------------
 function onSlotsChanged() {
   autoAssign();
-  const autoPinned = autoPinMismatchedReference();
   if (S.view === 'overlay' && !canOverlay()) S.view = 'grid';
   if (S.view === 'grid') renderGrid();
-  else if (autoPinned && canOverlay()) showOverlay();
   computeDuration();
   updateDurationDisplay();
   syncActive();
@@ -402,8 +339,6 @@ function onSlotsChanged() {
 }
 
 function onMeta() {
-  const autoPinned = autoPinMismatchedReference();
-  if (autoPinned && canOverlay()) showOverlay();
   if (S.view === 'grid') renderGrid();
   computeDuration();
   updateDurationDisplay();
@@ -678,7 +613,6 @@ function bindToolbar() {
   dom.resetViewBtn.addEventListener('click', resetView);
   dom.exportBtn.addEventListener('click', exportCurrentView);
   dom.refVideoBtn.addEventListener('click', toggleRefVideo);
-  dom.autoPinBtn.addEventListener('click', toggleAutoPin);
   dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 
@@ -831,7 +765,6 @@ function bindResizeTracking() {
 }
 
 async function init() {
-  loadAutoPinPref();
   initLoaders({ onChange: onSlotsChanged, onMeta, onReferenceImage: loadReferenceImage });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
   initSaves({ onApply: applyRestoredComparison, onApplySession: applyRestoredSession });
