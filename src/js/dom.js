@@ -88,7 +88,7 @@ export const dom = {
   loadWsBtn: $('load-ws-btn'),
   clearWsBtn: $('clear-ws-btn'),
   wsFileInput: $('ws-file-input'),
-  workspaceName: $('workspace-name'),
+  logoSub: $('logo-sub'),
 
   // workspace confirm modal
   wsConfirmModal: $('ws-confirm-modal'),
