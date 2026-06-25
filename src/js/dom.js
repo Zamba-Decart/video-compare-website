@@ -34,9 +34,14 @@ export const dom = {
   saveBtn: $('save-btn'),
   fullscreenBtn: $('fullscreen-btn'),
 
+  // layout
+  mainEl: $('main'),
+
   // saved comparisons
   savesRail: $('saves-rail'),
   savesList: $('saves-list'),
+  savesCollapseBtn: $('saves-collapse-btn'),
+  savesDockBtn: $('saves-dock-btn'),
 
   // reference panel
   stageRow: $('stage-row'),

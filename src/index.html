@@ -22,7 +22,8 @@
   </div>
 </header>
 
-<div class="main">
+<div class="main" id="main">
+  <div class="main-content" id="main-content">
 
   <!-- ===== Upload ===== -->
   <div class="dropzone" id="dz" tabindex="0">
@@ -182,9 +183,18 @@
     </div>
   </div>
 
+  </div><!-- /.main-content -->
+
   <!-- ===== Saved comparisons ===== -->
   <div class="saves-rail" id="saves-rail" hidden>
-    <div class="saves-head">Saved comparisons <span>· click to restore</span></div>
+    <div class="saves-head">
+      <span class="saves-title">Saved comparisons</span>
+      <span class="saves-hint">· click to restore</span>
+      <div class="saves-actions">
+        <button class="saves-act" id="saves-dock-btn" type="button" title="Dock to the right" aria-label="Dock saved panel to the right">⬓</button>
+        <button class="saves-act" id="saves-collapse-btn" type="button" title="Collapse" aria-label="Collapse saved panel" aria-expanded="true">▾</button>
+      </div>
+    </div>
     <div class="saves-list" id="saves-list"></div>
   </div>
 
