@@ -17,13 +17,27 @@
   <img class="logo-mark" src="../assets/favicon-512.png" alt="Video Compare logo">
   <span class="logo">Comparator</span>
   <span class="logo-sub">/ video diff tool</span>
+  <span class="workspace-name" id="workspace-name" hidden></span>
   <div class="header-reset-wrap">
     <button class="header-act" id="load-ws-btn" type="button" title="Load a .zip workspace bundle (videos + saved comparisons)">⤒ Load workspace</button>
     <button class="header-act" id="export-ws-btn" type="button" title="Save the whole workspace — videos + saved comparisons — to a .zip">⤓ Save workspace</button>
-    <button class="header-reset-btn" id="header-reset-btn" type="button">↺ Reset All</button>
+    <button class="header-act header-act-warn" id="clear-ws-btn" type="button" title="Clear the whole workspace (videos + all saved comparisons)">⌫ Clear workspace</button>
+    <button class="header-reset-btn" id="header-reset-btn" type="button">✕ Remove current media set</button>
   </div>
   <input type="file" accept=".zip,application/zip" id="ws-file-input" hidden>
 </header>
+
+<!-- ===== Workspace confirm (save / discard / cancel) ===== -->
+<div class="ws-modal" id="ws-confirm-modal" hidden>
+  <div class="ws-card">
+    <div class="ws-msg" id="ws-confirm-msg"></div>
+    <div class="ws-actions">
+      <button class="ws-btn" id="ws-confirm-cancel" type="button">Cancel</button>
+      <button class="ws-btn" id="ws-confirm-discard" type="button">Don't save</button>
+      <button class="ws-btn ws-btn-primary" id="ws-confirm-save" type="button">⤓ Save workspace first</button>
+    </div>
+  </div>
+</div>
 
 <div class="main" id="main">
   <div class="main-content" id="main-content">
@@ -121,6 +135,7 @@
         <div class="img-lbl" id="lbl-b">B</div>
         <div id="toggle-hint">click to toggle</div>
       </div>
+      <div class="stage-resize" id="stage-resize" title="Drag to resize the viewer" role="separator" aria-orientation="horizontal"></div>
     </div>
 
   </div>

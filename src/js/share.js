@@ -2,7 +2,7 @@
 // all saved comparisons + every video/reference blob) to a single .zip, and import one
 // back. Serverless — the file is downloaded and shared manually. JSZip is loaded as a
 // global (vendored, non-module) so this works on the live site AND the standalone build.
-import { kvGet, kvSet, putBlob, getBlob, listBlobIds } from './storage.js';
+import { kvGet, kvSet, kvDel, putBlob, getBlob, deleteBlob, listBlobIds } from './storage.js';
 import { saveSessionNow } from './saves.js';
 
 const MAGIC = 'video-comparator';
@@ -61,11 +61,11 @@ export async function exportWorkspace(rawName) {
   return filename;
 }
 
-// Parse a bundle and write its contents into storage (blobs + merged saves + adopted session).
-// Does NOT touch the live in-memory app — the caller reloads to restore from storage.
-// Merge policy for saved comparisons: union by id (incoming wins), newest first, capped.
+// Parse a bundle and FULLY REPLACE storage with it — no carryover. The recipient's existing
+// media, saved comparisons, and session are wiped, then the bundle's are written. Does NOT
+// touch the live in-memory app — the caller reloads to restore from storage.
 // Throws a friendly Error if the file isn't a valid bundle.
-export async function importWorkspaceToStorage(file, { maxSaves = 12 } = {}) {
+export async function importWorkspaceToStorage(file, { workspaceName = '' } = {}) {
   if (!window.JSZip) throw new Error('JSZip not loaded');
 
   let zip;
@@ -79,7 +79,11 @@ export async function importWorkspaceToStorage(file, { maxSaves = 12 } = {}) {
   catch (e) { throw new Error('bundle manifest is corrupt'); }
   if (manifest.app !== MAGIC) throw new Error('not a Video Comparator bundle');
 
-  // 1. restore every media blob
+  // Wipe existing media so nothing of the recipient's old workspace carries over.
+  const oldIds = (await listBlobIds().catch(() => null)) || [];
+  for (const id of oldIds) await deleteBlob(id).catch(() => {});
+
+  // Write every media blob from the bundle.
   for (const m of (manifest.media || [])) {
     const f = m.file && zip.file(m.file);
     if (!f) continue;
@@ -87,19 +91,15 @@ export async function importWorkspaceToStorage(file, { maxSaves = 12 } = {}) {
     await putBlob(m.blobId, blob, m.name || '').catch(() => {});
   }
 
-  // 2. merge saved comparisons (incoming first, union by id, newest first, capped)
-  const incoming = Array.isArray(manifest.saves) ? manifest.saves : [];
-  const existing = (await kvGet('saves').catch(() => null)) || [];
-  const byId = new Map();
-  for (const r of [...incoming, ...existing]) {
-    if (r && r.id && !byId.has(r.id)) byId.set(r.id, r);
+  // Adopt the bundle's saved comparisons + current workspace wholesale (replace, not merge).
+  await kvSet('saves', Array.isArray(manifest.saves) ? manifest.saves : []).catch(() => {});
+  const session = manifest.session || null;
+  if (session) {
+    if (workspaceName) session.workspaceName = workspaceName;
+    await kvSet('session', session).catch(() => {});
+  } else {
+    await kvDel('session').catch(() => {});
   }
-  let merged = [...byId.values()].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-  if (merged.length > maxSaves) merged = merged.slice(0, maxSaves);
-  await kvSet('saves', merged).catch(() => {});
 
-  // 3. adopt the bundle's current workspace
-  if (manifest.session) await kvSet('session', manifest.session).catch(() => {});
-
-  return { savesImported: incoming.length, savesTotal: merged.length, hasSession: !!manifest.session };
+  return { savesTotal: Array.isArray(manifest.saves) ? manifest.saves.length : 0, hasSession: !!session };
 }

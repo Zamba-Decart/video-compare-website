@@ -14,7 +14,7 @@ import { exportCurrentFrame, exportGridFrame } from './export.js';
 import { stripExt } from './helpers.js';
 import {
   initSaves, saveCurrentComparison, scheduleSessionSave, saveSessionNow,
-  restoreSession, renderSavesFromStore, invalidateSession, cancelSessionSave,
+  restoreSession, renderSavesFromStore, invalidateSession, cancelSessionSave, clearAllSaved,
 } from './saves.js';
 import { exportWorkspace, importWorkspaceToStorage } from './share.js';
 
@@ -22,11 +22,13 @@ let restoreSeekTime = null;   // one-shot: seek to a restored session's saved ti
 
 const hasVideos = () => S.slots.length > 0;
 const canOverlay = () => S.selA && S.selB && S.selA !== S.selB;
-const canPinRefVideo = () => S.slots.some((s) => s.id !== S.selA && s.id !== S.selB);
+const canPinRefVideo = () => S.slots.length >= 3;   // need a distinct 3rd clip for the reference role
 
 // ---------- view / chrome ------------------------------------------------
 function updateChrome() {
   const loaded = hasVideos();
+  dom.workspaceName.textContent = S.workspaceName || '';
+  dom.workspaceName.hidden = !S.workspaceName;
   dom.dz.hidden = loaded;
   dom.toolbar.hidden = !loaded;
   dom.transportBar.hidden = !loaded;
@@ -146,23 +148,27 @@ function onSelect(role, id) {
   applyOverlayChange();
 }
 
-// Dropdown / cycle: assign a clip to a side, swapping with the other side if it's the same
-// clip (so A and B are never the same video). No toggle-off.
-function setSide(role, id) {
+// A, B and the reference video (R) are three distinct roles. Assigning a clip that's already
+// held by another role SWAPS them — so the three stay distinct AND the pinned reference is
+// never silently dropped. Any clip can be moved into any role.
+const roleClip = (role) => (role === 'a' ? S.selA : role === 'b' ? S.selB : S.refVideoId);
+function placeClip(role, id) {
+  if (role === 'a') S.selA = id;
+  else if (role === 'b') S.selB = id;
+  else { S.refVideoId = id; S.refVideoOn = !!id; }
+}
+function currentRoleOf(id) {
+  if (id === S.selA) return 'a';
+  if (id === S.selB) return 'b';
+  if (S.refVideoOn && id === S.refVideoId) return 'r';
+  return null;
+}
+function assignRole(role, id) {
   if (!id || !getSlot(id)) return;
-  if (S.refVideoOn && S.refVideoId === id) {
-    S.refVideoOn = false;
-    S.refVideoId = null;
-  }
-  if (role === 'a') {
-    if (S.selA === id) return;
-    if (S.selB === id) S.selB = S.selA;
-    S.selA = id;
-  } else {
-    if (S.selB === id) return;
-    if (S.selA === id) S.selA = S.selB;
-    S.selB = id;
-  }
+  if (roleClip(role) === id && (role !== 'r' || S.refVideoOn)) return;   // already there
+  const src = currentRoleOf(id);
+  if (src && src !== role) placeClip(src, roleClip(role));   // the clip `role` held moves into id's old role
+  placeClip(role, id);
   applyOverlayChange();
 }
 
@@ -175,7 +181,7 @@ function cycleSide(role, dir) {
   if (cand.length < 2) return;   // nothing else to cycle to
   let i = cand.indexOf(cur);
   if (i === -1) i = 0;
-  setSide(role, cand[(i + dir + cand.length) % cand.length]);
+  assignRole(role, cand[(i + dir + cand.length) % cand.length]);
 }
 
 // Populate the A/B dropdowns with the loaded clips (overlay only).
@@ -194,32 +200,7 @@ function renderPickers() {
   fill(dom.pickA, S.selA);
   fill(dom.pickB, S.selB);
 
-  dom.pickRef.innerHTML = '';
-  S.slots
-    .filter((s) => s.id !== S.selA && s.id !== S.selB)
-    .forEach((s) => {
-      const o = document.createElement('option');
-      o.value = s.id;
-      o.textContent = stripExt(s.name);
-      dom.pickRef.appendChild(o);
-    });
-  if (S.refVideoId && getSlot(S.refVideoId)) dom.pickRef.value = S.refVideoId;
-}
-
-function setRefVideo(id, enabled = true) {
-  const slot = getSlot(id);
-  if (!slot || slot.id === S.selA || slot.id === S.selB) return;
-  S.refVideoId = slot.id;
-  S.refVideoOn = enabled;
-  if (S.view === 'overlay') {
-    dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
-    mountReferenceVideo();
-  }
-  syncActive();
-  updateChrome();
-  renderInfoBar();
-  renderPickers();
-  scheduleSessionSave();
+  fill(dom.pickRef, (S.refVideoId && getSlot(S.refVideoId)) ? S.refVideoId : null);
 }
 
 function toggleRefVideo() {
@@ -229,12 +210,13 @@ function toggleRefVideo() {
     syncActive();
     updateChrome();
     renderInfoBar();
+    renderPickers();
     scheduleSessionSave();
     return;
   }
 
   const next = S.slots.find((s) => s.id !== S.selA && s.id !== S.selB);
-  if (next) setRefVideo(next.id, true);
+  if (next) assignRole('r', next.id);
 }
 
 // Apply the overlay state (mode / positions / transforms) from a record onto S + UI.
@@ -268,9 +250,11 @@ function resetViewState() {
 
 // Restore a saved comparison: load just the two clips into a FRESH comparison
 // (default mode/positions/transforms, from the start) — but bring back its reference image.
-function applyRestoredComparison(rec, aId, bId, refData) {
+function applyRestoredComparison(rec, aId, bId, refData, refVideoSlotId) {
   S.selA = aId;
   S.selB = bId;
+  S.refVideoId = refVideoSlotId || null;
+  S.refVideoOn = !!refVideoSlotId;
   resetViewState();
   S.curTime = 0;
   restoreSeekTime = null;
@@ -282,6 +266,7 @@ function applyRestoredComparison(rec, aId, bId, refData) {
 
 // Restore a whole session (created = freshly-made slots, in order).
 function applyRestoredSession(rec, created, refData) {
+  S.workspaceName = rec.workspaceName || '';
   S.loop = rec.loop !== false;
   S.autoplay = rec.autoplay !== false;
   S.muted = rec.muted !== false;
@@ -602,9 +587,9 @@ function bindToolbar() {
     scheduleSessionSave();
   });
 
-  dom.pickA.addEventListener('change', () => { setSide('a', dom.pickA.value); dom.pickA.blur(); });
-  dom.pickB.addEventListener('change', () => { setSide('b', dom.pickB.value); dom.pickB.blur(); });
-  dom.pickRef.addEventListener('change', () => { setRefVideo(dom.pickRef.value, true); dom.pickRef.blur(); });
+  dom.pickA.addEventListener('change', () => { assignRole('a', dom.pickA.value); dom.pickA.blur(); });
+  dom.pickB.addEventListener('change', () => { assignRole('b', dom.pickB.value); dom.pickB.blur(); });
+  dom.pickRef.addEventListener('change', () => { assignRole('r', dom.pickRef.value); dom.pickRef.blur(); });
 
   dom.addMoreBtn.addEventListener('click', openPicker);
   dom.swapBtn.addEventListener('click', swapAB);
@@ -679,33 +664,81 @@ function bindSavesPanel() {
 }
 
 // ---------- workspace bundles (export / import a .zip) -------------------
+// Modal asking whether to save the current workspace before a destructive action.
+// Resolves to 'save' | 'discard' | 'cancel'.
+function confirmWorkspaceAction(message) {
+  return new Promise((resolve) => {
+    dom.wsConfirmMsg.textContent = message;
+    dom.wsConfirmModal.hidden = false;
+    const finish = (val) => {
+      dom.wsConfirmModal.hidden = true;
+      dom.wsConfirmSave.removeEventListener('click', onSave);
+      dom.wsConfirmDiscard.removeEventListener('click', onDiscard);
+      dom.wsConfirmCancel.removeEventListener('click', onCancel);
+      dom.wsConfirmModal.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    };
+    const onSave = () => finish('save');
+    const onDiscard = () => finish('discard');
+    const onCancel = () => finish('cancel');
+    const onBackdrop = (e) => { if (e.target === dom.wsConfirmModal) finish('cancel'); };
+    const onKey = (e) => { if (e.key === 'Escape') finish('cancel'); };
+    dom.wsConfirmSave.addEventListener('click', onSave);
+    dom.wsConfirmDiscard.addEventListener('click', onDiscard);
+    dom.wsConfirmCancel.addEventListener('click', onCancel);
+    dom.wsConfirmModal.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// Returns true if a bundle was actually downloaded, false if cancelled / nothing to export.
 async function exportWorkspaceBundle() {
   const a = getSlot(S.selA), b = getSlot(S.selB);
-  let def = 'workspace';
-  if (a && b) def = `${stripExt(a.name)}_vs_${stripExt(b.name)}`;
-  else if (S.slots[0]) def = stripExt(S.slots[0].name);
+  let def = S.workspaceName || 'workspace';
+  if (!S.workspaceName && a && b) def = `${stripExt(a.name)}_vs_${stripExt(b.name)}`;
+  else if (!S.workspaceName && S.slots[0]) def = stripExt(S.slots[0].name);
   const name = window.prompt('Name this workspace bundle:', def);
-  if (name === null) return;   // cancelled
+  if (name === null) return false;   // cancelled
   try {
     const filename = await exportWorkspace(name);
-    if (!filename) window.alert('Nothing to export yet — load some videos or save a comparison first.');
+    if (!filename) { window.alert('Nothing to export yet — load some videos or save a comparison first.'); return false; }
+    return true;
   } catch (e) {
     window.alert('Export failed: ' + (e && e.message ? e.message : 'unknown error'));
+    return false;
   }
 }
 
-// Import writes everything to storage, then we reload so init() restores cleanly from it
-// (avoids racing the live workspace auto-save against the freshly-imported session).
+const deriveWorkspaceName = (filename) =>
+  (filename || '').replace(/\.zip$/i, '').replace(/_video_comparator$/i, '').trim() || 'workspace';
+
+// Loading a workspace FULLY replaces the current one (videos + saved comparisons). Offer to save
+// the current workspace first, then import + reload so init() restores cleanly from storage.
 async function loadBundleFile(file) {
   if (!file) return;
+  const wsName = deriveWorkspaceName(file.name);
+  const choice = await confirmWorkspaceAction(`Load “${wsName}”? This replaces your current videos and all saved comparisons.`);
+  if (choice === 'cancel') return;
+  if (choice === 'save' && !(await exportWorkspaceBundle())) return;   // user backed out of saving
   try {
     invalidateSession();   // any pending/in-flight workspace save now bails — don't clobber the import
     cancelSessionSave();
-    await importWorkspaceToStorage(file);
+    await importWorkspaceToStorage(file, { workspaceName: wsName });
     window.location.reload();
   } catch (e) {
     window.alert('Couldn\'t load that file: ' + (e && e.message ? e.message : 'invalid bundle'));
   }
+}
+
+// "Clear workspace" — wipe EVERYTHING (loaded videos + all saved comparisons), after offering
+// to save the current workspace first.
+async function clearWholeWorkspace() {
+  const choice = await confirmWorkspaceAction('Clear the whole workspace? This removes the loaded videos and ALL saved comparisons. This can’t be undone.');
+  if (choice === 'cancel') return;
+  if (choice === 'save' && !(await exportWorkspaceBundle())) return;
+  clearWorkspace();          // unload current media + reset (also clears the workspace name)
+  await clearAllSaved();     // wipe persisted saves + session + every stored blob
 }
 
 function bindTransport() {
@@ -762,16 +795,17 @@ function clearWorkspace() {
   S.selA = null; S.selB = null; S.refVideoId = null; S.refVideoOn = false; S.view = 'grid';
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
+  S.workspaceName = '';
   clearReferenceImage();
   S.reference.on = false;
   showGrid();
   updateChrome();
 }
 
-// "Reset All" clears only the current comparison; saved comparisons are kept (delete those per-card).
+// "Remove current media set" — unload the loaded videos; saved comparisons are kept.
 function resetAll() {
   if (!S.slots.length) return;
-  if (!window.confirm('Clear the current videos? Your saved comparisons are kept.')) return;
+  if (!window.confirm('Remove the current media set? Your saved comparisons are kept.')) return;
   clearWorkspace();
 }
 
@@ -795,6 +829,46 @@ function bindResizeTracking() {
   }
 }
 
+// ---------- stage resize (drag the bottom edge to grow/shrink the viewer) -------------
+const STAGE_H_KEY = 'vc.stageHeight';
+function applyStageHeight(px) {
+  const h = Math.max(240, Math.min(1200, Math.round(px)));
+  document.documentElement.style.setProperty('--stage-h', `${h}px`);
+  return h;
+}
+function loadStageHeight() {
+  try {
+    const v = parseInt(localStorage.getItem(STAGE_H_KEY), 10);
+    if (Number.isFinite(v)) applyStageHeight(v);
+  } catch (e) { /* storage unavailable */ }
+}
+function bindStageResize() {
+  if (!dom.stageResize) return;
+  let startY = 0, startH = 0, dragging = false;
+  const onMove = (e) => {
+    if (!dragging) return;
+    applyStageHeight(startH + (e.clientY - startY));
+    if (S.view === 'overlay') renderOverlay();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    dom.body.classList.remove('resizing-stage');
+    try { localStorage.setItem(STAGE_H_KEY, String(Math.round(dom.stageWrap.getBoundingClientRect().height))); } catch (e) { /* ignore */ }
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  };
+  dom.stageResize.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    startY = e.clientY;
+    startH = dom.stageWrap.getBoundingClientRect().height;
+    dom.body.classList.add('resizing-stage');
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
 async function init() {
   initLoaders({ onChange: onSlotsChanged, onMeta, onReferenceImage: loadReferenceImage, onBundle: loadBundleFile });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
@@ -810,7 +884,9 @@ async function init() {
   dom.headerResetBtn.addEventListener('click', resetAll);
   dom.exportWsBtn.addEventListener('click', exportWorkspaceBundle);
   dom.loadWsBtn.addEventListener('click', () => dom.wsFileInput.click());
+  dom.clearWsBtn.addEventListener('click', clearWholeWorkspace);
   dom.wsFileInput.addEventListener('change', (e) => { loadBundleFile(e.target.files[0]); dom.wsFileInput.value = ''; });
+  bindStageResize();
 
   // flush the session before the tab is hidden/closed (debounce may not have fired)
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSessionNow(); });
@@ -820,6 +896,7 @@ async function init() {
   dom.fpsInput.value = String(S.fps);
   dom.rateSelect.value = String(S.rate);
   loadSavesPanelPrefs();
+  loadStageHeight();
   updateOptionButtons();
   updatePlayButton();
   updateChrome();
