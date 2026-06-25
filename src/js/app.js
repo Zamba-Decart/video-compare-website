@@ -19,6 +19,7 @@ import {
 import { exportWorkspace, importWorkspaceToStorage } from './share.js';
 
 let restoreSeekTime = null;   // one-shot: seek to a restored session's saved time once metadata loads
+let unsaved = false;          // true when the current A/B tuple isn't a saved comparison (→ green Save button)
 
 const hasVideos = () => S.slots.length > 0;
 const canOverlay = () => S.selA && S.selB && S.selA !== S.selB;
@@ -27,8 +28,9 @@ const canPinRefVideo = () => S.slots.length >= 3;   // need a distinct 3rd clip 
 // ---------- view / chrome ------------------------------------------------
 function updateChrome() {
   const loaded = hasVideos();
-  dom.workspaceName.textContent = S.workspaceName || '';
-  dom.workspaceName.hidden = !S.workspaceName;
+  // workspace name replaces the "/ video diff tool" tagline when a bundle is loaded
+  dom.logoSub.textContent = S.workspaceName ? `/ ${S.workspaceName}` : '/ video diff tool';
+  dom.logoSub.classList.toggle('is-workspace', !!S.workspaceName);
   dom.dz.hidden = loaded;
   dom.toolbar.hidden = !loaded;
   dom.transportBar.hidden = !loaded;
@@ -53,7 +55,9 @@ function updateChrome() {
   const refVisible = refVideoVisible || refImageVisible;
   dom.refVideoBtn.classList.toggle('is-on', refVideoVisible);
   dom.refVideoBtn.textContent = refVideoVisible ? '📌 Unpin Original' : '📌 Pin Original Video';
-  dom.referenceBtn.classList.toggle('is-on', S.reference.on);
+  // pin video and reference image are mutually exclusive in the panel → only one button lit
+  dom.referenceBtn.classList.toggle('is-on', S.reference.on && !S.refVideoOn);
+  dom.saveBtn.classList.toggle('save-dirty', unsaved && canOverlay());   // green when the tuple isn't saved
   dom.referencePanel.hidden = !refVisible;
   dom.body.classList.toggle('reference-on', refVisible);
   dom.refVideoStage.hidden = !refVideoVisible;
@@ -119,6 +123,7 @@ function setView(view) {
 // ---------- selection ----------------------------------------------------
 // Re-render after the A/B selection changed (from grid pills, dropdowns, or cycling).
 function applyOverlayChange() {
+  unsaved = true;   // the A/B/R tuple just changed → not the saved comparison anymore
   if (S.view === 'overlay') {
     if (!canOverlay()) { showGrid(); return; }
     dom.comp.querySelectorAll('video').forEach((v) => v.remove());
@@ -169,6 +174,7 @@ function assignRole(role, id) {
   const src = currentRoleOf(id);
   if (src && src !== role) placeClip(src, roleClip(role));   // the clip `role` held moves into id's old role
   placeClip(role, id);
+  if (role === 'r') S.reference.on = false;   // pinning a video hides the reference image (mutually exclusive)
   applyOverlayChange();
 }
 
@@ -258,8 +264,11 @@ function applyRestoredComparison(rec, aId, bId, refData, refVideoSlotId) {
   resetViewState();
   S.curTime = 0;
   restoreSeekTime = null;
-  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, true);
+  // pinned video and reference image are mutually exclusive: if the save pinned a video, load
+  // the image (if any) but leave it inactive so the user can still toggle to it.
+  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, !refVideoSlotId);
   else { clearReferenceImage(); S.reference.on = false; }
+  unsaved = false;   // a restored saved comparison IS the saved one
   showOverlay();
   if (S.autoplay) play();
 }
@@ -267,6 +276,7 @@ function applyRestoredComparison(rec, aId, bId, refData, refVideoSlotId) {
 // Restore a whole session (created = freshly-made slots, in order).
 function applyRestoredSession(rec, created, refData) {
   S.workspaceName = rec.workspaceName || '';
+  unsaved = true;   // a restored workspace's current tuple isn't itself a saved comparison
   S.loop = rec.loop !== false;
   S.autoplay = rec.autoplay !== false;
   S.muted = rec.muted !== false;
@@ -310,6 +320,7 @@ function autoAssign() {
 // ---------- slot lifecycle ----------------------------------------------
 function onSlotsChanged() {
   autoAssign();
+  if (hasVideos()) unsaved = true;   // loading/removing clips makes the current set unsaved
   if (S.view === 'overlay' && !canOverlay()) S.view = 'grid';
   if (S.view === 'grid') renderGrid();
   computeDuration();
@@ -414,6 +425,11 @@ function syncReferenceUI() {
 
 function toggleReference() {
   S.reference.on = !S.reference.on;
+  if (S.reference.on && S.refVideoOn) {   // showing the image overrides the pinned video
+    S.refVideoOn = false;
+    dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
+    syncActive();
+  }
   updateChrome();
   scheduleSessionSave();
   if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }   // stage width changed → re-fit + re-place divider
@@ -428,6 +444,11 @@ function loadReferenceImage(file) {
   S.reference.url = URL.createObjectURL(file);
   dom.refImg.src = S.reference.url;
   S.reference.on = true;
+  if (S.refVideoOn) {   // loading a reference image overrides the pinned video
+    S.refVideoOn = false;
+    dom.refVideoStage.querySelectorAll('video').forEach((v) => v.remove());
+    syncActive();
+  }
   syncReferenceUI();
   updateChrome();
   scheduleSessionSave();
@@ -484,7 +505,9 @@ function resetView() {
 function swapAB() {
   if (!canOverlay()) return;
   [S.selA, S.selB] = [S.selB, S.selA];
+  unsaved = true;
   if (S.view === 'overlay') { dom.comp.querySelectorAll('video').forEach((v) => v.remove()); mountOverlay(); }
+  updateChrome();
   renderInfoBar();
   renderPickers();
   renderOverlay();
@@ -599,7 +622,7 @@ function bindToolbar() {
   dom.resetViewBtn.addEventListener('click', resetView);
   dom.exportBtn.addEventListener('click', exportCurrentView);
   dom.refVideoBtn.addEventListener('click', toggleRefVideo);
-  dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
+  dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) { unsaved = false; clearWorkspace(); } });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 
   // reference image — overlay toggles the panel; grid (no panel) goes straight to upload
@@ -796,6 +819,7 @@ function clearWorkspace() {
   S.zoom = 1; S.panX = 0; S.panY = 0; S.rotation = 0; S.flipH = false; S.flipV = false;
   S.curTime = 0;
   S.workspaceName = '';
+  unsaved = false;
   clearReferenceImage();
   S.reference.on = false;
   showGrid();
