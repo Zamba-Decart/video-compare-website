@@ -37,11 +37,12 @@ function updateChrome() {
   dom.abPickers.hidden = !overlay;
   dom.dWrap.hidden = !overlay;
   // overlay-only tools
-  [dom.swapBtn, dom.resetViewBtn, dom.referenceBtn].forEach((b) => { b.hidden = !overlay; });
+  [dom.swapBtn, dom.resetViewBtn].forEach((b) => { b.hidden = !overlay; });
   dom.refVideoBtn.hidden = !overlay || !canPinRefVideo();
   dom.refVideoPick.hidden = !overlay || !canPinRefVideo();
-  // available in BOTH grid and overlay (whenever videos are loaded)
-  [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
+  // available in BOTH grid and overlay (whenever videos are loaded) — the reference
+  // *upload* must always be reachable (grid uploads, overlay shows the panel).
+  [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.referenceBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
 
   // reference panel: overlay-only + only when toggled on
   const refVideoVisible = overlay && S.refVideoOn && getSlot(S.refVideoId);
@@ -432,25 +433,6 @@ function zoomBy(delta, clientX, clientY) {
   scheduleSessionSave();
 }
 
-// Inch the active comparison control: wipe position in Slider mode, blend in Dissolve mode.
-// Dissolve moves faster than the slider (the wipe wants fine alignment; the blend doesn't).
-function nudgeActiveSlider(dir, big) {
-  if (S.view !== 'overlay') return;
-  if (S.mode === 'slider') {
-    const step = big ? 0.05 : 0.01;
-    S.pos = Math.max(0.001, Math.min(0.999, S.pos + dir * step));
-    renderOverlay();
-    scheduleSessionSave();
-  } else if (S.mode === 'dissolve') {
-    const step = big ? 0.20 : 0.08;
-    S.dissolve = Math.max(0, Math.min(1, S.dissolve + dir * step));
-    dom.dRange.value = String(S.dissolve);
-    dom.dPct.textContent = Math.round(S.dissolve * 100) + '%';
-    renderOverlay();
-    scheduleSessionSave();
-  }
-}
-
 // Flip/rotate are view transforms that apply in BOTH grid and overlay; render the active view.
 function applyTransformButtons() {
   dom.flipHBtn.classList.toggle('is-on', S.flipH);
@@ -668,13 +650,24 @@ function bindToolbar() {
   dom.saveBtn.addEventListener('click', async () => { if (await saveCurrentComparison()) clearWorkspace(); });
   dom.fullscreenBtn.addEventListener('click', toggleFullscreen);
 
-  // reference image
-  dom.referenceBtn.addEventListener('click', toggleReference);
+  // reference image — overlay toggles the panel; grid (no panel) goes straight to upload
+  dom.referenceBtn.addEventListener('click', () => {
+    if (S.view === 'overlay') toggleReference();
+    else dom.referenceInput.click();
+  });
   dom.referenceInput.addEventListener('change', (e) => { loadReferenceImage(e.target.files[0]); dom.referenceInput.value = ''; });
   dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearActiveReference(); scheduleSessionSave(); });
   window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
     loadReferenceImage(event.detail?.file);
   });
+}
+
+function bindShortcuts() {
+  const close = () => { dom.shortcutsModal.hidden = true; };
+  dom.shortcutsBtn.addEventListener('click', () => { dom.shortcutsModal.hidden = false; });
+  dom.shortcutsClose.addEventListener('click', close);
+  dom.shortcutsModal.addEventListener('click', (e) => { if (e.target === dom.shortcutsModal) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !dom.shortcutsModal.hidden) close(); });
 }
 
 function bindTransport() {
@@ -713,15 +706,11 @@ function bindKeyboard() {
     }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); seek(S.curTime - (e.shiftKey ? 5 : 1 / (S.fps || 30))); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); seek(S.curTime + (e.shiftKey ? 5 : 1 / (S.fps || 30))); }
-    else if (k === '0') { e.preventDefault(); resetView(); }
     else if (k === '+' || e.key === '=') { e.preventDefault(); const r = dom.stageWrap.getBoundingClientRect(); zoomBy(0.2, r.left + r.width / 2, r.top + r.height / 2); }
     else if (k === '-' || e.key === '_') { e.preventDefault(); const r = dom.stageWrap.getBoundingClientRect(); zoomBy(-0.2, r.left + r.width / 2, r.top + r.height / 2); }
-    else if (k === 'l') { e.preventDefault(); setLoop(!S.loop); }
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e') { e.preventDefault(); exportCurrentView(); }
-    else if (e.key === '<') { e.preventDefault(); nudgeActiveSlider(-1, e.altKey); }   // matches the glyph across keyboard layouts
-    else if (e.key === '>') { e.preventDefault(); nudgeActiveSlider(1, e.altKey); }
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
     else if (e.code === 'BracketLeft') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', -1); }
   });
@@ -774,6 +763,7 @@ async function init() {
   initSaves({ onApply: applyRestoredComparison, onApplySession: applyRestoredSession });
   bindToolbar();
   bindTransport();
+  bindShortcuts();
   bindOverlayInteraction();
   bindKeyboard();
   bindFullscreenTracking();

@@ -74,6 +74,9 @@ export const dom = {
   // info
   infoBar: $('info-bar'),
   infoList: $('info-list'),
+  shortcutsBtn: $('shortcuts-btn'),
+  shortcutsModal: $('shortcuts-modal'),
+  shortcutsClose: $('shortcuts-close'),
 
   headerResetBtn: $('header-reset-btn'),
 };

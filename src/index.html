@@ -154,20 +154,29 @@
   <div class="info-bar" id="info-bar">
     <div class="info-list" id="info-list"></div>
     <div style="flex:1"></div>
-    <div class="kbd-hints">
-      <span class="kbd">Space</span>play
-      <span class="kbd">, .</span>frame
-      <span class="kbd">S D T</span>modes
-      <span class="kbd">← →</span>scrub
-      <span class="kbd">&lt; &gt;</span>nudge
-      <span class="kbd">[ ]</span>cycle B
-      <span class="kbd">⇧[ ]</span>cycle A
-      <span class="kbd">wheel</span>zoom
-      <span class="kbd">shift+drag</span>pan
-      <span class="kbd">0</span>reset
-      <span class="kbd">L</span>loop
-      <span class="kbd">M</span>mute
-      <span class="kbd">F</span>full
+    <button class="info-btn" id="shortcuts-btn" type="button">⌨ Shortcuts</button>
+  </div>
+
+  <!-- ===== Shortcuts popover ===== -->
+  <div class="shortcuts-modal" id="shortcuts-modal" hidden>
+    <div class="shortcuts-card">
+      <div class="shortcuts-head">
+        <span>Keyboard shortcuts</span>
+        <button class="shortcuts-close" id="shortcuts-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="shortcuts-grid">
+        <div><span class="kbd">Space</span> play / pause</div>
+        <div><span class="kbd">, .</span> frame step</div>
+        <div><span class="kbd">S D T</span> slider / dissolve / toggle</div>
+        <div><span class="kbd">← →</span> scrub <em>(Shift = ±5s)</em></div>
+        <div><span class="kbd">[ ]</span> cycle clip B <em>(Shift = A)</em></div>
+        <div><span class="kbd">wheel</span> zoom to cursor</div>
+        <div><span class="kbd">shift + drag</span> pan</div>
+        <div><span class="kbd">+ −</span> zoom in / out</div>
+        <div><span class="kbd">M</span> mute</div>
+        <div><span class="kbd">F</span> fullscreen</div>
+        <div><span class="kbd">E</span> screenshot</div>
+      </div>
     </div>
   </div>
 
