@@ -116,6 +116,10 @@ export async function saveCurrentComparison(options = {}) {
   }
   const reference = await ensureReference();   // {blobId,name} or null
 
+  // Persist the pinned reference video (the 3rd clip) so restoring the comparison brings it back.
+  const refSlot = (S.refVideoOn && getSlot(S.refVideoId)) ? getSlot(S.refVideoId) : null;
+  const refVideoId = refSlot ? await ensureBlob(refSlot) : null;
+
   const rec = {
     id: `cmp-${Date.now()}-${Math.floor(Math.random() * 1e5)}`,
     savedAt: Date.now(),
@@ -124,6 +128,7 @@ export async function saveCurrentComparison(options = {}) {
     a: { blobId: aId, name: a.name },
     b: { blobId: bId, name: b.name },
     reference,
+    refVideo: refVideoId ? { blobId: refVideoId, name: refSlot.name } : null,
     mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
     zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
   };
@@ -212,7 +217,13 @@ async function restoreSave(id) {
     window.alert('Could not restore — the saved video data is missing.');
     return;
   }
-  onApply(rec, a.slot.id, b.slot.id, await loadReference(rec.reference));
+  // bring back the pinned reference video too (if the save had one and its bytes are present)
+  let refVideoSlotId = null;
+  if (rec.refVideo && rec.refVideo.blobId && present.has(rec.refVideo.blobId)) {
+    const rv = await loadClipSlot(rec.refVideo);
+    if (rv.slot) refVideoSlotId = rv.slot.id;
+  }
+  onApply(rec, a.slot.id, b.slot.id, await loadReference(rec.reference), refVideoSlotId);
 }
 
 // Load a saved reference image blob; returns { blob, name, blobId } or null.
@@ -268,6 +279,7 @@ export async function saveSessionNow() {
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
       loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, curTime: S.curTime,
+      workspaceName: S.workspaceName || '',
     };
     if (gen !== wipeGen) return;
     await safe(kvSet('session', rec));
@@ -312,7 +324,7 @@ async function gcBlobs() {
   try {
     const keep = new Set();
     const saves = (await safe(kvGet('saves'), [])) || [];
-    saves.forEach((r) => { keep.add(r.a.blobId); keep.add(r.b.blobId); if (r.reference) keep.add(r.reference.blobId); });
+    saves.forEach((r) => { keep.add(r.a.blobId); keep.add(r.b.blobId); if (r.reference) keep.add(r.reference.blobId); if (r.refVideo) keep.add(r.refVideo.blobId); });
     const sess = await safe(kvGet('session'), null);
     if (sess && Array.isArray(sess.slots)) sess.slots.forEach((s) => keep.add(s.blobId));
     if (sess && sess.reference) keep.add(sess.reference.blobId);

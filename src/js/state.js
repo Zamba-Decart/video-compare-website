@@ -4,6 +4,7 @@ export const S = {
   slots: [],
 
   view: 'grid',        // 'grid' | 'overlay'
+  workspaceName: '',   // label of the current workspace (set when a bundle is loaded)
   selA: null,          // slot id assigned to A
   selB: null,          // slot id assigned to B
   refVideoId: null,    // slot id pinned in the left reference panel

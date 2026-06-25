@@ -86,5 +86,17 @@ export const dom = {
   headerResetBtn: $('header-reset-btn'),
   exportWsBtn: $('export-ws-btn'),
   loadWsBtn: $('load-ws-btn'),
+  clearWsBtn: $('clear-ws-btn'),
   wsFileInput: $('ws-file-input'),
+  workspaceName: $('workspace-name'),
+
+  // workspace confirm modal
+  wsConfirmModal: $('ws-confirm-modal'),
+  wsConfirmMsg: $('ws-confirm-msg'),
+  wsConfirmSave: $('ws-confirm-save'),
+  wsConfirmDiscard: $('ws-confirm-discard'),
+  wsConfirmCancel: $('ws-confirm-cancel'),
+
+  // stage resize handle
+  stageResize: $('stage-resize'),
 };
