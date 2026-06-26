@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Comparator importer — settings</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #101114; --panel: #17191e; --border: #2b2d33; --text: #f4f4f5;
+      --muted: #8d929e; --accent: #7dd3fc; --go: #e6f85e;
+    }
+    * { box-sizing: border-box; }
+    body { width: 460px; margin: 0; padding: 18px; background: var(--bg); color: var(--text); }
+    h1 { margin: 0 0 4px; font-size: 15px; }
+    p.sub { margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 0 0 14px; }
+    legend { padding: 0 6px; color: var(--muted); font-size: 11px; }
+    label.choice { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; font-size: 13px; }
+    label.choice .desc { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+    input[type="radio"] { accent-color: var(--accent); margin-top: 2px; }
+    input[type="url"] {
+      width: 100%; margin-top: 8px; padding: 8px 10px; font: inherit; font-size: 12px;
+      color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 7px;
+    }
+    input[type="url"]:disabled { opacity: .5; }
+    .actions { display: flex; align-items: center; gap: 12px; }
+    button {
+      border: 1px solid var(--go); border-radius: 7px; background: var(--go); color: #111;
+      font: inherit; font-weight: 650; font-size: 13px; padding: 8px 16px; cursor: pointer;
+    }
+    #saved { color: var(--accent); font-size: 12px; opacity: 0; transition: opacity .15s; }
+    #saved.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <h1>Comparator destination</h1>
+  <p class="sub">Where “Open in Comparator” sends the grabbed media. Pick the hosted app, your local dev server, or a custom URL.</p>
+
+  <fieldset>
+    <legend>App URL</legend>
+    <label class="choice">
+      <input type="radio" name="dest" value="live">
+      <span>Live (GitHub Pages)<span class="desc">https://zamba-decart.github.io/video-compare-website/src/index.html</span></span>
+    </label>
+    <label class="choice">
+      <input type="radio" name="dest" value="local">
+      <span>Local dev server<span class="desc">http://localhost:8765/src/index.html</span></span>
+    </label>
+    <label class="choice">
+      <input type="radio" name="dest" value="custom">
+      <span>Custom URL
+        <input type="url" id="custom-url" placeholder="https://…/src/index.html" disabled>
+      </span>
+    </label>
+  </fieldset>
+
+  <div class="actions">
+    <button id="save" type="button">Save</button>
+    <span id="saved">Saved ✓</span>
+  </div>
+
+  <script src="./options.js"></script>
+</body>
+</html>

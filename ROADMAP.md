@@ -90,9 +90,21 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 
 ---
 
-## Phase 5 — Chrome extension (grab page media → open in app)  · **L** (save for last)
+## Phase 5 — Chrome extension (grab page media → open in app)  ✅ P1 shipped
 
-### #9 — "Open these videos in the Comparator" extension
+### #9 — "Open these videos in the Comparator" extension  · **P1 DONE**
+- **Shipped (P1):** an MV3 extension in [`chrome extension/`](chrome%20extension/). Click the
+  icon → `detect.js` scans the active tab for `<video>`/`<source>`/`og:video` + `<img>`/`og:image`
+  → popup (tick clips, star one image as the reference, replace/append) → the service worker
+  fetches each chosen URL (`<all_urls>` bypasses page CORS), base64-encodes it, finds/opens the
+  Comparator tab, and `deliver.js` posts `LOAD_VIDEOS` into the existing `extImport.js` bridge —
+  no app changes. Destination URL configurable (live Pages [default] / localhost / custom).
+  Streamed `blob:`/MSE/HLS sources are listed but greyed out. **Decisions resolved:** URL
+  configurable (#1); `<all_urls>` accepted for the internal tool (#2); load-unpacked distribution
+  for v1 (#3). **Still open (P2/P3):** in-page overlay tagging, CSS background images, frame-grab
+  thumbnails, streamed-media capture.
+
+#### Original design notes (#9)
 - **Goal:** on any webpage with a few videos (+ a reference image), click the extension and have them loaded into the app automatically.
 - **Foundation we already have:** `extImport.js` accepts `window.postMessage({ type: 'LOAD_VIDEOS', mode, videos, referenceImage })`. The extension just needs to *find* media, *fetch* it, and *deliver* it through that bridge.
 - **Architecture (MV3):**
@@ -115,7 +127,7 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 2. ~~**Phase 2** (#2, #3)~~ — ✅ shipped (PR #3); auto-pin later removed entirely.
 3. ~~**Phase 3** (#6)~~ — ✅ shipped (PR #4).
 4. ~~**Phase 4** (#1)~~ — ✅ shipped (PR #6): portable `.zip` workspace bundles (full mirror, plain download).
-5. **Phase 5** (#9) — the extension, last, after a short design pass on the popup vs overlay UX. ← **only item left**
+5. ~~**Phase 5** (#9)~~ — ✅ P1 shipped: MV3 extension in `chrome extension/` (popup + direct-file grab → `extImport.js`). P2/P3 (overlay tagging, CSS backgrounds, frame-grab thumbnails, streamed media) remain.
 
 Workflow: small batches per phase on `main` (or short feature branches → PR), rebuild the
 standalone (`tools/build-standalone.py`) and verify in-browser before each push.

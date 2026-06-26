@@ -1,8 +1,20 @@
-# Handoff — next up: the browser extension (Phase 5 / #9)
+# Handoff — the browser extension (Phase 5 / #9)
 
-This is a cold-start brief for the next agent. Everything through Phase 4 + a UX
-batch is shipped on `main` and live. The remaining roadmap item is the **Chrome
-extension** that grabs a page's videos/images and loads them into the app.
+> **✅ Update 2026-06-25 — P1 shipped.** The extension is built and lives in
+> [`chrome extension/`](chrome%20extension/) (MV3). Load it unpacked from that folder
+> (`chrome://extensions` → Developer mode → Load unpacked). It's the generalized,
+> any-page successor to the dashboard-specific `video-compare-extension` repo, and it
+> feeds the `extImport.js` bridge unchanged. Open decisions below were resolved:
+> **(1)** destination URL is configurable (live Pages default / localhost / custom, via
+> the ⚙ options page); **(2)** `<all_urls>` host permission accepted for the internal
+> tool; **(3)** load-unpacked distribution for v1. See
+> [`chrome extension/README.md`](chrome%20extension/README.md). **Remaining (P2/P3):**
+> in-page overlay tagging, CSS background images, frame-grab thumbnails, streamed
+> (`blob:`/MSE/HLS) capture. The design notes below are kept as background.
+
+This was a cold-start brief for the extension work. Everything through Phase 4 + a UX
+batch is shipped on `main` and live; the **Chrome extension** (grab a page's
+videos/images → load into the app) is the Phase 5 item — now P1-built.
 
 ---
 

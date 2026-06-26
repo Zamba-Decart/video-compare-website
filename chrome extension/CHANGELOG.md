@@ -1,0 +1,21 @@
+# Changelog — Page Media Importer extension
+
+## 1.0.0 — Phase 5 / #9, P1
+
+First version. Generalized, any-page MV3 extension that feeds the app's
+`extImport.js` bridge — no app changes required.
+
+- `detect.js`: scans the active tab for `<video>`/`<source>`/`og:video` and
+  `<img>`/`og:image`; flags `blob:`/MSE/streamed sources as ungrabbable instead of
+  dropping them.
+- Popup: video checkboxes (select-all), optional reference-image star, replace/append
+  mode, "Open in Comparator".
+- `service-worker.js`: fetch chosen URLs → base64 `data:` URLs → find/open/focus the
+  Comparator tab → inject `deliver.js` → post `LOAD_VIDEOS`.
+- `deliver.js`: guarded relay (no duplicate listeners on a reused tab).
+- Options page: configurable destination URL (Live GitHub Pages [default] / localhost
+  dev / custom), stored in `chrome.storage.sync`.
+
+Reuses the fetch/base64/tab-lifecycle approach proven in the dashboard-specific
+`video-compare-extension` repo, generalized to work on any page via `activeTab` +
+`chrome.scripting`.

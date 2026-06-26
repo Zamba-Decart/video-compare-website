@@ -4,6 +4,18 @@ All notable changes to the Video Comparator are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this is a
 single-page browser tool, so "releases" map to batches of work rather than tagged builds.
 
+## [1.5.0] — 2026-06-25
+
+### Added
+- **Chrome extension** (`chrome extension/`, MV3) — Phase 5 / #9, P1. Click the toolbar
+  icon on any page to scan it for videos (`<video>`/`<source>`/`og:video`) and images
+  (`<img>`/`og:image`), tick the clips, optionally star one image as the reference, and
+  open them straight in the Comparator. The service worker fetches each chosen URL
+  (`host_permissions: <all_urls>` bypasses page CORS), base64-encodes it, finds/opens the
+  Comparator tab, and delivers via the existing `extImport.js` `LOAD_VIDEOS` bridge — **no
+  app changes**. Destination URL is configurable (live Pages [default] / localhost dev /
+  custom). Streamed `blob:`/MSE/HLS sources are listed but greyed out as ungrabbable.
+
 ## [1.4.0] — 2026-06-15
 
 ### Added
