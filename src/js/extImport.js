@@ -84,8 +84,17 @@ window.addEventListener('message', (event) => {
   const { data } = event;
   if (!data || typeof data !== 'object') return;
   if (data.type === 'LOAD_VIDEOS') {
-    loadVideoFiles(data.videos, { mode: data.mode || 'append' })
-      .then(() => loadReferenceImage(data.referenceImage));
+    const mode = data.mode || 'append';
+    loadVideoFiles(data.videos, { mode })
+      .then(() => {
+        if (data.referenceImage) {
+          loadReferenceImage(data.referenceImage);
+        } else if (mode === 'replace') {
+          // A fresh 'replace' import with no reference must NOT carry over the previous
+          // tuple's reference image — clear it.
+          window.dispatchEvent(new CustomEvent('CLEAR_REFERENCE_IMAGE'));
+        }
+      });
   }
 });
 

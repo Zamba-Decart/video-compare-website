@@ -17,7 +17,7 @@
   if (window.__vcDeliverInstalled) return;
   window.__vcDeliverInstalled = true;
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || message.type !== 'LOAD_VIDEOS' || !Array.isArray(message.videos)) return;
     window.postMessage(
       {
@@ -28,5 +28,9 @@
       },
       '*'
     );
+    // Respond synchronously so the worker's sendMessage channel closes cleanly. Without
+    // this, the worker sees "The message port closed before a response was received" and
+    // reports a false failure (so the picker overlay never clears, even though it worked).
+    sendResponse({ ok: true });
   });
 })();

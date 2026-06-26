@@ -1,5 +1,13 @@
 # Changelog — Page Media Importer extension
 
+## 1.2.2 — deliver responds (port-closed + overlay-clear fix)
+
+- `deliver.js` now calls `sendResponse` after posting `LOAD_VIDEOS` to the page. Without it
+  the worker's `chrome.tabs.sendMessage` saw *"The message port closed before a response was
+  received"* and reported a **false failure** — so a successful import showed an error and
+  the on-page selector overlay never cleared. Now the worker resolves, and the overlay (and
+  popup) close themselves after a successful import.
+
 ## 1.2.1 — dashboard lazy-cell fix
 
 - The eval-dashboard per-row **Compare** button now grabs the **whole tuple**, not just

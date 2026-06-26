@@ -60,7 +60,13 @@ header {
   display: flex; align-items: center; gap: 7px;
 }
 .header-act:hover { border-color: var(--border2); color: var(--text); }
-.header-act-warn:hover { border-color: rgba(239,68,68,0.6); color: #ff9b9b; }
+/* Clear workspace — RED (destructive: wipes videos + all saved comparisons) */
+.header-act-warn {
+  background: rgba(239,68,68,0.14);
+  border-color: rgba(239,68,68,0.55);
+  color: #ff8a8a;
+}
+.header-act-warn:hover { background: rgba(239,68,68,0.22); border-color: rgba(255,107,107,0.9); color: #ffd4d4; }
 @media (max-width: 720px) { .header-act { padding: 7px 10px; } }
 
 /* the tagline turns into the current workspace name (accent) when a bundle is loaded */
@@ -91,20 +97,21 @@ header {
 }
 .ws-btn:hover { border-color: var(--border2); color: var(--text); }
 .ws-btn-primary { border-color: rgba(200,240,60,0.4); background: var(--acc-dim); color: var(--acc); }
+/* Remove current media set — ORANGE (less destructive: only unloads the current videos) */
 .header-reset-btn {
   font-family: 'Space Mono', monospace;
   font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
   padding: 7px 14px; border-radius: 8px;
-  background: rgba(239,68,68,0.14);
-  border: 1px solid rgba(239,68,68,0.6);
-  color: #ff6b6b; cursor: pointer;
+  background: rgba(245,158,11,0.14);
+  border: 1px solid rgba(245,158,11,0.55);
+  color: #f5b14b; cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
   display: flex; align-items: center; gap: 7px;
 }
 .header-reset-btn:hover {
-  background: rgba(239,68,68,0.22);
-  border-color: rgba(255,107,107,0.9);
-  color: #ffd4d4;
+  background: rgba(245,158,11,0.22);
+  border-color: rgba(245,158,11,0.9);
+  color: #ffd9a0;
 }
 
 .main {

@@ -671,6 +671,14 @@ function bindToolbar() {
   window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
     loadReferenceImage(event.detail?.file);
   });
+  // A replace-import with no reference clears the previous tuple's reference image.
+  window.addEventListener('CLEAR_REFERENCE_IMAGE', () => {
+    clearReferenceImage();
+    S.reference.on = false;
+    updateChrome();
+    if (S.view === 'overlay') relayoutOverlay();
+    scheduleSessionSave();
+  });
 }
 
 function bindShortcuts() {

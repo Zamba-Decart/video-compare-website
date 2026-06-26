@@ -4,6 +4,16 @@ All notable changes to the Video Comparator are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this is a
 single-page browser tool, so "releases" map to batches of work rather than tagged builds.
 
+## [1.7.2] — 2026-06-26
+
+### Changed
+- Header buttons recolored by severity: **Remove current media set** is orange (only
+  unloads the current videos); **Clear workspace** is red (wipes everything).
+
+### Fixed
+- A `replace` import (extension/`postMessage`) with no reference image now **clears** the
+  previous tuple's reference instead of carrying it into the new comparison.
+
 ## [1.7.1] — 2026-06-26
 
 ### Changed

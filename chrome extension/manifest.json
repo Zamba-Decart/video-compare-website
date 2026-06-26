@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Video Comparator — Page Media Importer",
   "description": "Grab the videos (and a reference image) from any page and open them in the Video Comparator.",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "permissions": [
     "activeTab",
     "scripting",
