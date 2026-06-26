@@ -29,6 +29,19 @@
   "background": {
     "service_worker": "background/service-worker.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://eval-dashboard.decart.ai/*"],
+      "js": ["content/dashboard.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
+      "matches": ["https://eval-dashboard.decart.ai/*"]
+    }
+  ],
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": false

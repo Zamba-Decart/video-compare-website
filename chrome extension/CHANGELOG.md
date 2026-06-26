@@ -19,3 +19,12 @@ First version. Generalized, any-page MV3 extension that feeds the app's
 Reuses the fetch/base64/tab-lifecycle approach proven in the dashboard-specific
 `video-compare-extension` repo, generalized to work on any page via `activeTab` +
 `chrome.scripting`.
+
+### Dashboard integration (folded in)
+
+- `dashboard.js`: the Decart eval-dashboard content script from the standalone
+  `video-compare-extension` repo, now part of this unified extension. Injects per-row
+  **Compare** buttons on `eval-dashboard.decart.ai` with rich label extraction and
+  reference-image detection. Shares the `IMPORT_VIDEO_URLS` contract with the popup.
+- The extension icon now appears on the injected **Compare** button (via
+  `web_accessible_resources`); the button label swaps independently so the icon stays put.
