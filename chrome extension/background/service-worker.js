@@ -55,7 +55,8 @@ async function blobToDataUrl(blob, fallbackType) {
 }
 
 async function fetchAsDescriptor(item, fallbackType, fallbackName) {
-  const res = await fetch(item.src);
+  // host_permissions bypass CORS; `credentials: 'include'` also covers cookie-gated media.
+  const res = await fetch(item.src, { credentials: 'include' });
   if (!res.ok) throw new Error(`Failed to fetch ${item.name || item.src}: HTTP ${res.status}`);
   const blob = await res.blob();
   return {

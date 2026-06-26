@@ -131,21 +131,44 @@ function videoLabel(video, index, labels = []) {
   return filenameFromUrl(src, `video-${index + 1}.mp4`);
 }
 
+// The dashboard lazy-loads the model-output cells: until scrolled into view a cell's
+// <video> has NO src — only a poster `…/assets/<id>.thumb.jpg`. The video is the same
+// asset, `…/assets/<id>.mp4` (verified against the live dashboard). So when there's no
+// src, recover the URL from the poster attribute (which React renders to the DOM, and
+// which a content script can read — unlike the page's React props).
+function videoUrlFromPoster(poster) {
+  if (poster && /\.thumb\.jpg(?:[?#]|$)/i.test(poster)) {
+    return poster.replace(/\.thumb\.jpg(?:\?[^#]*)?(?:#.*)?$/i, '.mp4');
+  }
+  return '';
+}
+
+// Output assets live at `…/results/<model>/step_<n>/…`; the <model> segment is the
+// meaningful name to show (far better than a UUID filename).
+function modelLabelFromUrl(url) {
+  const m = /\/results\/([^/]+)\//.exec(url || '');
+  return m ? m[1] : '';
+}
+
 function metadataForVideo(video, index, labels = []) {
-  const src = video.currentSrc
-    || video.src
+  let src = video.currentSrc
+    || video.getAttribute('src')
     || video.querySelector('source[src]')?.getAttribute('src')
     || '';
+  if (!src) src = videoUrlFromPoster(video.getAttribute('poster') || '');
   if (!src) return null;
 
-  const label = videoLabel(video, index, labels);
+  const absolute = new URL(src, location.href).href;
+  const model = modelLabelFromUrl(absolute);
+
+  const label = model || videoLabel(video, index, labels);
   const fallback = filenameFromUrl(src, `video-${index + 1}.mp4`);
   const hasExtension = /\.[a-z0-9]{2,5}$/i.test(label);
   const name = hasExtension ? safeName(label, fallback) : `${safeName(label, fallback)}.mp4`;
 
   return {
-    id: src,
-    src: new URL(src, location.href).href,
+    id: absolute,
+    src: absolute,
     name,
     label,
     poster: video.poster || '',

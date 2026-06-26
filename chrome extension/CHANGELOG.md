@@ -1,5 +1,14 @@
 # Changelog — Page Media Importer extension
 
+## 1.2.1 — dashboard lazy-cell fix
+
+- The eval-dashboard per-row **Compare** button now grabs the **whole tuple**, not just
+  the one loaded cell. The model-output cells lazy-load, so until scrolled into view they
+  have no `<video src>` — only a poster `…/assets/<id>.thumb.jpg`. We now recover the video
+  URL from that poster (`<id>.mp4`, verified against the live dashboard) and name each clip
+  by its model (the `/results/<model>/` path segment) instead of a UUID.
+- Service-worker fetches now send `credentials: 'include'` so cookie-gated media works too.
+
 ## 1.2.0 — persistent selector widget + cleaner popup
 
 - **Toggleable on-page widget.** The overlay selector is now a persistent corner icon
