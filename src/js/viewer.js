@@ -6,7 +6,9 @@ export function applyAspectRatio() {
   const a = getSlot(S.selA);
   if (a && a.w && a.h) {
     dom.stageWrap.style.aspectRatio = `${a.w} / ${a.h}`;
-    dom.stageWrap.style.setProperty('--ar', a.w / a.h);   // used by the reference-on max-width cap
+    // --ar lives on :root so BOTH the stage (max-width cap) and the reference panel
+    // (its width is sized to the video) can read it.
+    document.documentElement.style.setProperty('--ar', a.w / a.h);
     dom.stageWrap.style.maxHeight = '78vh';
     dom.stageWrap.style.minHeight = '';
   }
@@ -16,6 +18,43 @@ export function clearAspectRatio() {
   dom.stageWrap.style.aspectRatio = '';
   dom.stageWrap.style.maxHeight = '';
   dom.stageWrap.style.minHeight = '';
+  clearStageRowSizing();
+}
+
+// Clear the JS-driven overlay sizing so grid / no-reference layouts fall back to CSS flex.
+export function clearStageRowSizing() {
+  [dom.stageWrap, dom.referencePanel].forEach((el) => { el.style.width = ''; el.style.height = ''; });
+  if (dom.midResize) dom.midResize.style.height = '';
+}
+
+function setSize(el, w, h) {
+  const wp = `${w}px`, hp = `${h}px`;
+  if (el.style.width !== wp) el.style.width = wp;
+  if (el.style.height !== hp) el.style.height = hp;
+}
+
+// In overlay WITH the reference panel, size the video box and the reference box to the
+// video's aspect ratio (so the video fills its box — no letterbox, divider stays welded),
+// scaling the reference by --ref-grow. Height is clamped so video + reference + handle fit
+// the row width (prevents landscape overflow); the result is centered in the row.
+export function layoutStageRow() {
+  const refOn = S.view === 'overlay' && document.body.classList.contains('reference-on');
+  if (!refOn) { clearStageRowSizing(); return; }
+
+  const a = getSlot(S.selA);
+  const ar = (a && a.w && a.h) ? a.w / a.h : 1.78;
+  const grow = S.reference.scale || 1;
+  const rowW = dom.stageRow.clientWidth;
+  const reserve = 48;   // stage-row gap + mid handle + a little slack (avoid sub-px overflow)
+  const prefH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stage-h')) || 460;
+  const maxH = Math.min(prefH, window.innerHeight * 0.78);
+  const fitH = (rowW - reserve) / (ar * (1 + grow));
+  const H = Math.round(Math.max(160, Math.min(maxH, fitH)));
+  const videoW = Math.round(H * ar);
+
+  setSize(dom.stageWrap, videoW, H);
+  setSize(dom.referencePanel, Math.round(videoW * grow), H);
+  if (dom.midResize) dom.midResize.style.height = `${H}px`;
 }
 
 // Move the two selected videos into the overlay stage (A under, B over).
@@ -82,6 +121,7 @@ export function renderOverlay() {
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
   if (!a || !b) return;
+  layoutStageRow();   // keep boxes sized to the video aspect before placing the divider
   const va = a.videoEl;
   const vb = b.videoEl;
 

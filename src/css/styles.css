@@ -311,21 +311,44 @@ body.saves-collapsed .saves-list { display: none; }
   align-items: flex-start;
   width: 100%;
 }
-.stage-row > .stage-wrap { flex: 1.4 1 0; min-width: 0; }
+.stage-row > .stage-wrap { flex: 1 1 0; min-width: 0; }
 
-/* When the reference panel is open, cap the stage width so its aspect-ratio height never
-   exceeds the viewport cap — keeps the video filling the stage (no letterbox → divider stays
-   aligned). --ar (= videoW/videoH) is set by viewer.applyAspectRatio. */
-body.reference-on .stage-row > .stage-wrap {
-  max-width: calc(78vh * var(--ar, 1.78));
+/* With the reference panel open, viewer.layoutStageRow() sizes the video box and the
+   reference box to the video aspect (JS-driven, fits the row), so the stage is no longer a
+   flex-filler — it takes the explicit size set inline. The row centers the pair. */
+body.reference-on .stage-row { justify-content: center; }
+/* JS sets the explicit size; drop the flex-fill and the 240px floor so the video box
+   matches the reference box height exactly at every scale. */
+body.reference-on .stage-row > .stage-wrap { flex: 0 0 auto; min-height: 0; }
+
+/* Vertical drag handle between the reference panel and the video — resize their split. */
+.mid-resize {
+  flex: 0 0 16px;
+  align-self: center;
+  height: var(--stage-h, 460px);
+  max-height: 78vh;
+  cursor: col-resize;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; touch-action: none;
 }
+.mid-resize::after {
+  content: ''; width: 4px; height: 54px; border-radius: 3px;
+  background: var(--border2); opacity: 0.65; transition: opacity 0.15s, background 0.15s;
+}
+.mid-resize:hover::after { opacity: 1; background: var(--acc); height: 72px; }
+body.resizing-split { cursor: col-resize; user-select: none; }
+body.resizing-split iframe, body.resizing-split video { pointer-events: none; }
 
 .reference-panel {
   position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  align-self: stretch;
-  min-height: 320px;
+  /* The box is sized to the video and scaled by --ref-grow (slider / mid divider).
+     1× = the video's own width → reference never larger than the video by default. */
+  flex: 0 0 auto;
+  width: calc(var(--stage-h, 460px) * var(--ar, 1.78) * var(--ref-grow, 1));
+  min-width: 110px;
+  max-width: 78%;
+  height: var(--stage-h, 460px);
+  max-height: 78vh;
   background: var(--surf);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -348,10 +371,6 @@ body.reference-on .stage-row > .stage-wrap {
 .ref-img {
   max-width: 100%; max-height: 100%;
   object-fit: contain; display: block; user-select: none;
-  /* 1× = contained within the panel (≤ the video). The scaler drives 0.5×–2×. */
-  transform: scale(var(--ref-scale, 1));
-  transform-origin: center center;
-  transition: transform 0.08s ease-out;
 }
 .ref-video-stage {
   position: absolute;
@@ -416,15 +435,15 @@ body.reference-on .stage-row > .stage-wrap {
 }
 /* draggable bottom edge to resize the viewer */
 .stage-resize {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 12px;
+  position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
   cursor: ns-resize; z-index: 5;
   display: flex; align-items: center; justify-content: center;
 }
 .stage-resize::after {
-  content: ''; width: 46px; height: 3px; border-radius: 2px;
-  background: var(--border2); opacity: 0.5; transition: opacity 0.15s, background 0.15s;
+  content: ''; width: 64px; height: 4px; border-radius: 3px;
+  background: var(--border2); opacity: 0.7; transition: opacity 0.15s, background 0.15s, width 0.15s;
 }
-.stage-resize:hover::after { opacity: 1; background: var(--acc); }
+.stage-resize:hover::after { opacity: 1; background: var(--acc); width: 88px; }
 body.resizing-stage { cursor: ns-resize; user-select: none; }
 body.resizing-stage iframe, body.resizing-stage video { pointer-events: none; }
 body.is-fullscreen .stage-resize { display: none; }

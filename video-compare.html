@@ -324,21 +324,44 @@ body.saves-collapsed .saves-list { display: none; }
   align-items: flex-start;
   width: 100%;
 }
-.stage-row > .stage-wrap { flex: 1.4 1 0; min-width: 0; }
+.stage-row > .stage-wrap { flex: 1 1 0; min-width: 0; }
 
-/* When the reference panel is open, cap the stage width so its aspect-ratio height never
-   exceeds the viewport cap — keeps the video filling the stage (no letterbox → divider stays
-   aligned). --ar (= videoW/videoH) is set by viewer.applyAspectRatio. */
-body.reference-on .stage-row > .stage-wrap {
-  max-width: calc(78vh * var(--ar, 1.78));
+/* With the reference panel open, viewer.layoutStageRow() sizes the video box and the
+   reference box to the video aspect (JS-driven, fits the row), so the stage is no longer a
+   flex-filler — it takes the explicit size set inline. The row centers the pair. */
+body.reference-on .stage-row { justify-content: center; }
+/* JS sets the explicit size; drop the flex-fill and the 240px floor so the video box
+   matches the reference box height exactly at every scale. */
+body.reference-on .stage-row > .stage-wrap { flex: 0 0 auto; min-height: 0; }
+
+/* Vertical drag handle between the reference panel and the video — resize their split. */
+.mid-resize {
+  flex: 0 0 16px;
+  align-self: center;
+  height: var(--stage-h, 460px);
+  max-height: 78vh;
+  cursor: col-resize;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; touch-action: none;
 }
+.mid-resize::after {
+  content: ''; width: 4px; height: 54px; border-radius: 3px;
+  background: var(--border2); opacity: 0.65; transition: opacity 0.15s, background 0.15s;
+}
+.mid-resize:hover::after { opacity: 1; background: var(--acc); height: 72px; }
+body.resizing-split { cursor: col-resize; user-select: none; }
+body.resizing-split iframe, body.resizing-split video { pointer-events: none; }
 
 .reference-panel {
   position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  align-self: stretch;
-  min-height: 320px;
+  /* The box is sized to the video and scaled by --ref-grow (slider / mid divider).
+     1× = the video's own width → reference never larger than the video by default. */
+  flex: 0 0 auto;
+  width: calc(var(--stage-h, 460px) * var(--ar, 1.78) * var(--ref-grow, 1));
+  min-width: 110px;
+  max-width: 78%;
+  height: var(--stage-h, 460px);
+  max-height: 78vh;
   background: var(--surf);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -361,10 +384,6 @@ body.reference-on .stage-row > .stage-wrap {
 .ref-img {
   max-width: 100%; max-height: 100%;
   object-fit: contain; display: block; user-select: none;
-  /* 1× = contained within the panel (≤ the video). The scaler drives 0.5×–2×. */
-  transform: scale(var(--ref-scale, 1));
-  transform-origin: center center;
-  transition: transform 0.08s ease-out;
 }
 .ref-video-stage {
   position: absolute;
@@ -429,15 +448,15 @@ body.reference-on .stage-row > .stage-wrap {
 }
 /* draggable bottom edge to resize the viewer */
 .stage-resize {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 12px;
+  position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
   cursor: ns-resize; z-index: 5;
   display: flex; align-items: center; justify-content: center;
 }
 .stage-resize::after {
-  content: ''; width: 46px; height: 3px; border-radius: 2px;
-  background: var(--border2); opacity: 0.5; transition: opacity 0.15s, background 0.15s;
+  content: ''; width: 64px; height: 4px; border-radius: 3px;
+  background: var(--border2); opacity: 0.7; transition: opacity 0.15s, background 0.15s, width 0.15s;
 }
-.stage-resize:hover::after { opacity: 1; background: var(--acc); }
+.stage-resize:hover::after { opacity: 1; background: var(--acc); width: 88px; }
 body.resizing-stage { cursor: ns-resize; user-select: none; }
 body.resizing-stage iframe, body.resizing-stage video { pointer-events: none; }
 body.is-fullscreen .stage-resize { display: none; }
@@ -921,6 +940,8 @@ body.is-fullscreen .stage-wrap {
       <button class="ref-clear" id="ref-clear" type="button" title="Remove reference" hidden>×</button>
     </div>
 
+    <div class="mid-resize" id="mid-resize" title="Drag to resize reference vs video" role="separator" aria-orientation="vertical" hidden></div>
+
     <div class="stage-wrap" id="stage-wrap">
       <div class="empty-state" id="empty-state">
         <div class="es-icon">▦</div>
@@ -1194,6 +1215,7 @@ const dom = {
   refImg: $('ref-img'),
   refScale: $('ref-scale'),
   refScaleWrap: $('ref-scale-wrap'),
+  midResize: $('mid-resize'),
   refVideoStage: $('ref-video-stage'),
   refVideoLabel: $('ref-video-label'),
   refClear: $('ref-clear'),
@@ -1691,7 +1713,9 @@ function applyAspectRatio() {
   const a = getSlot(S.selA);
   if (a && a.w && a.h) {
     dom.stageWrap.style.aspectRatio = `${a.w} / ${a.h}`;
-    dom.stageWrap.style.setProperty('--ar', a.w / a.h);   // used by the reference-on max-width cap
+    // --ar lives on :root so BOTH the stage (max-width cap) and the reference panel
+    // (its width is sized to the video) can read it.
+    document.documentElement.style.setProperty('--ar', a.w / a.h);
     dom.stageWrap.style.maxHeight = '78vh';
     dom.stageWrap.style.minHeight = '';
   }
@@ -1701,6 +1725,43 @@ function clearAspectRatio() {
   dom.stageWrap.style.aspectRatio = '';
   dom.stageWrap.style.maxHeight = '';
   dom.stageWrap.style.minHeight = '';
+  clearStageRowSizing();
+}
+
+// Clear the JS-driven overlay sizing so grid / no-reference layouts fall back to CSS flex.
+function clearStageRowSizing() {
+  [dom.stageWrap, dom.referencePanel].forEach((el) => { el.style.width = ''; el.style.height = ''; });
+  if (dom.midResize) dom.midResize.style.height = '';
+}
+
+function setSize(el, w, h) {
+  const wp = `${w}px`, hp = `${h}px`;
+  if (el.style.width !== wp) el.style.width = wp;
+  if (el.style.height !== hp) el.style.height = hp;
+}
+
+// In overlay WITH the reference panel, size the video box and the reference box to the
+// video's aspect ratio (so the video fills its box — no letterbox, divider stays welded),
+// scaling the reference by --ref-grow. Height is clamped so video + reference + handle fit
+// the row width (prevents landscape overflow); the result is centered in the row.
+function layoutStageRow() {
+  const refOn = S.view === 'overlay' && document.body.classList.contains('reference-on');
+  if (!refOn) { clearStageRowSizing(); return; }
+
+  const a = getSlot(S.selA);
+  const ar = (a && a.w && a.h) ? a.w / a.h : 1.78;
+  const grow = S.reference.scale || 1;
+  const rowW = dom.stageRow.clientWidth;
+  const reserve = 48;   // stage-row gap + mid handle + a little slack (avoid sub-px overflow)
+  const prefH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stage-h')) || 460;
+  const maxH = Math.min(prefH, window.innerHeight * 0.78);
+  const fitH = (rowW - reserve) / (ar * (1 + grow));
+  const H = Math.round(Math.max(160, Math.min(maxH, fitH)));
+  const videoW = Math.round(H * ar);
+
+  setSize(dom.stageWrap, videoW, H);
+  setSize(dom.referencePanel, Math.round(videoW * grow), H);
+  if (dom.midResize) dom.midResize.style.height = `${H}px`;
 }
 
 // Move the two selected videos into the overlay stage (A under, B over).
@@ -1767,6 +1828,7 @@ function renderOverlay() {
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
   if (!a || !b) return;
+  layoutStageRow();   // keep boxes sized to the video aspect before placing the divider
   const va = a.videoEl;
   const vb = b.videoEl;
 
@@ -1836,7 +1898,7 @@ function renderInfoBar() {
     .join('');
 }
 
-  return { applyAspectRatio, clearAspectRatio, mountOverlay, mountReferenceVideo, renderOverlay, renderInfoBar };
+  return { applyAspectRatio, clearAspectRatio, clearStageRowSizing, layoutStageRow, mountOverlay, mountReferenceVideo, renderOverlay, renderInfoBar };
 })();
 
 const __m_grid = (function () {
@@ -2715,10 +2777,12 @@ function updateChrome() {
   dom.refImg.hidden = refVideoVisible || !S.reference.url;
   dom.refClear.hidden = !refVisible;
 
-  // reference-image size scaler: overlay-only, and only when an actual image is shown.
-  const refImgShown = refImageVisible && !!S.reference.url && !refVideoVisible;
-  dom.refScaleWrap.hidden = !refImgShown;
-  dom.refImg.style.setProperty('--ref-scale', S.reference.scale ?? 1);
+  // reference size: the slider + the mid divider both drive --ref-grow (the panel's
+  // width = video-width × grow). Available whenever the reference panel shows (image or
+  // pinned video), overlay-only — so it never appears in grid.
+  dom.refScaleWrap.hidden = !refVisible;
+  dom.midResize.hidden = !refVisible;
+  document.documentElement.style.setProperty('--ref-grow', S.reference.scale ?? 1);
   dom.refScale.value = String(S.reference.scale ?? 1);
 
   // overlay pill availability
@@ -2997,7 +3061,10 @@ function onMeta() {
   updateDurationDisplay();
   renderInfoBar();
   renderPickers();
-  if (S.view === 'overlay') mountReferenceVideo();
+  // Dimensions are only known once metadata loads — re-apply the aspect ratio so --ar
+  // (which sizes the reference panel and the stage cap) reflects the real video, not the
+  // landscape fallback. Otherwise a portrait clip gets a too-wide reference panel.
+  if (S.view === 'overlay') { applyAspectRatio(); mountReferenceVideo(); renderOverlay(); }
   // re-apply a restored session's playback position once we actually know durations
   if (restoreSeekTime != null && S.duration > 0) {
     const t = restoreSeekTime;
@@ -3294,7 +3361,8 @@ function bindToolbar() {
   dom.refScale.addEventListener('input', (e) => {
     const v = parseFloat(e.target.value);
     S.reference.scale = Number.isFinite(v) ? Math.min(2, Math.max(0.5, v)) : 1;
-    dom.refImg.style.setProperty('--ref-scale', S.reference.scale);
+    document.documentElement.style.setProperty('--ref-grow', S.reference.scale);
+    if (S.view === 'overlay') renderOverlay();   // panel width changed → re-fit + re-place divider
     scheduleSessionSave();
   });
   window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
@@ -3558,6 +3626,42 @@ function bindStageResize() {
   });
 }
 
+// ---------- reference/video split resize (drag the divider between them) -------------
+// Panel width = video-width × grow, so naturalW (= the video's width) = panelW / grow.
+// Dragging right grows the reference panel (video shrinks); left does the opposite.
+function bindMidResize() {
+  if (!dom.midResize) return;
+  let startX = 0, naturalW = 1, dragging = false;
+  const onMove = (e) => {
+    if (!dragging) return;
+    const panelW = dom.referencePanel.getBoundingClientRect().width + (e.clientX - startX);
+    const grow = Math.max(0.5, Math.min(2, panelW / naturalW));
+    S.reference.scale = grow;
+    document.documentElement.style.setProperty('--ref-grow', grow);
+    dom.refScale.value = String(grow);
+    startX = e.clientX;   // incremental so the panel tracks the cursor 1:1
+    if (S.view === 'overlay') renderOverlay();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    dom.body.classList.remove('resizing-split');
+    scheduleSessionSave();
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  };
+  dom.midResize.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    const grow = S.reference.scale || 1;
+    naturalW = dom.referencePanel.getBoundingClientRect().width / grow;   // = the video's width
+    dom.body.classList.add('resizing-split');
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
 async function init() {
   initLoaders({ onChange: onSlotsChanged, onMeta, onReferenceImage: loadReferenceImage, onBundle: loadBundleFile });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
@@ -3576,6 +3680,7 @@ async function init() {
   dom.clearWsBtn.addEventListener('click', clearWholeWorkspace);
   dom.wsFileInput.addEventListener('change', (e) => { loadBundleFile(e.target.files[0]); dom.wsFileInput.value = ''; });
   bindStageResize();
+  bindMidResize();
 
   // flush the session before the tab is hidden/closed (debounce may not have fired)
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSessionNow(); });

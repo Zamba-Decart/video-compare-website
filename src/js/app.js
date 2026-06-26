@@ -67,10 +67,12 @@ function updateChrome() {
   dom.refImg.hidden = refVideoVisible || !S.reference.url;
   dom.refClear.hidden = !refVisible;
 
-  // reference-image size scaler: overlay-only, and only when an actual image is shown.
-  const refImgShown = refImageVisible && !!S.reference.url && !refVideoVisible;
-  dom.refScaleWrap.hidden = !refImgShown;
-  dom.refImg.style.setProperty('--ref-scale', S.reference.scale ?? 1);
+  // reference size: the slider + the mid divider both drive --ref-grow (the panel's
+  // width = video-width × grow). Available whenever the reference panel shows (image or
+  // pinned video), overlay-only — so it never appears in grid.
+  dom.refScaleWrap.hidden = !refVisible;
+  dom.midResize.hidden = !refVisible;
+  document.documentElement.style.setProperty('--ref-grow', S.reference.scale ?? 1);
   dom.refScale.value = String(S.reference.scale ?? 1);
 
   // overlay pill availability
@@ -349,7 +351,10 @@ function onMeta() {
   updateDurationDisplay();
   renderInfoBar();
   renderPickers();
-  if (S.view === 'overlay') mountReferenceVideo();
+  // Dimensions are only known once metadata loads — re-apply the aspect ratio so --ar
+  // (which sizes the reference panel and the stage cap) reflects the real video, not the
+  // landscape fallback. Otherwise a portrait clip gets a too-wide reference panel.
+  if (S.view === 'overlay') { applyAspectRatio(); mountReferenceVideo(); renderOverlay(); }
   // re-apply a restored session's playback position once we actually know durations
   if (restoreSeekTime != null && S.duration > 0) {
     const t = restoreSeekTime;
@@ -646,7 +651,8 @@ function bindToolbar() {
   dom.refScale.addEventListener('input', (e) => {
     const v = parseFloat(e.target.value);
     S.reference.scale = Number.isFinite(v) ? Math.min(2, Math.max(0.5, v)) : 1;
-    dom.refImg.style.setProperty('--ref-scale', S.reference.scale);
+    document.documentElement.style.setProperty('--ref-grow', S.reference.scale);
+    if (S.view === 'overlay') renderOverlay();   // panel width changed → re-fit + re-place divider
     scheduleSessionSave();
   });
   window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
@@ -910,6 +916,42 @@ function bindStageResize() {
   });
 }
 
+// ---------- reference/video split resize (drag the divider between them) -------------
+// Panel width = video-width × grow, so naturalW (= the video's width) = panelW / grow.
+// Dragging right grows the reference panel (video shrinks); left does the opposite.
+function bindMidResize() {
+  if (!dom.midResize) return;
+  let startX = 0, naturalW = 1, dragging = false;
+  const onMove = (e) => {
+    if (!dragging) return;
+    const panelW = dom.referencePanel.getBoundingClientRect().width + (e.clientX - startX);
+    const grow = Math.max(0.5, Math.min(2, panelW / naturalW));
+    S.reference.scale = grow;
+    document.documentElement.style.setProperty('--ref-grow', grow);
+    dom.refScale.value = String(grow);
+    startX = e.clientX;   // incremental so the panel tracks the cursor 1:1
+    if (S.view === 'overlay') renderOverlay();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    dom.body.classList.remove('resizing-split');
+    scheduleSessionSave();
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  };
+  dom.midResize.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    const grow = S.reference.scale || 1;
+    naturalW = dom.referencePanel.getBoundingClientRect().width / grow;   // = the video's width
+    dom.body.classList.add('resizing-split');
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
 async function init() {
   initLoaders({ onChange: onSlotsChanged, onMeta, onReferenceImage: loadReferenceImage, onBundle: loadBundleFile });
   initGrid({ onSelect, onRemove: (id) => removeSlot(id) });
@@ -928,6 +970,7 @@ async function init() {
   dom.clearWsBtn.addEventListener('click', clearWholeWorkspace);
   dom.wsFileInput.addEventListener('change', (e) => { loadBundleFile(e.target.files[0]); dom.wsFileInput.value = ''; });
   bindStageResize();
+  bindMidResize();
 
   // flush the session before the tab is hidden/closed (debounce may not have fired)
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSessionNow(); });

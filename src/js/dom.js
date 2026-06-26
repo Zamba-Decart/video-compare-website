@@ -50,6 +50,7 @@ export const dom = {
   refImg: $('ref-img'),
   refScale: $('ref-scale'),
   refScaleWrap: $('ref-scale-wrap'),
+  midResize: $('mid-resize'),
   refVideoStage: $('ref-video-stage'),
   refVideoLabel: $('ref-video-label'),
   refClear: $('ref-clear'),

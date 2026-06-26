@@ -4,6 +4,26 @@ All notable changes to the Video Comparator are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this is a
 single-page browser tool, so "releases" map to batches of work rather than tagged builds.
 
+## [1.7.0] — 2026-06-26
+
+### Changed
+- **Reference scaler now resizes the box, not just the image.** The slider (and the new
+  divider, below) drive `--ref-grow`, which sizes the reference *panel* to the video's
+  width × scale. 1× = the video's own size (never larger by default); up to 2×.
+- **Overlay sizing reworked (`layoutStageRow`)**: the video box and reference box are both
+  sized to the video's aspect ratio and clamped to fit the row, so the video always fills
+  its box (no letterbox, divider stays welded) and is never tiny — fixes portrait/dashboard
+  clips defaulting small. The pair is centered.
+
+### Added
+- **Drag divider between the reference and the video** (`#mid-resize`): drag right to grow
+  the reference / shrink the video, left for the opposite — kept in sync with the slider.
+- **Clearer resize handles**: a visible grip on the divider between the media, and a larger
+  grip on the bottom edge (vertical media resize, below the media / above the transport).
+
+### Fixed
+- The reference scaler slider no longer appears in grid view (only in overlay).
+
 ## [1.6.0] — 2026-06-26
 
 ### Added
