@@ -47,6 +47,7 @@ export const S = {
     name: null,
     file: null,    // the File/blob, persisted to IndexedDB
     blobId: null,  // stable content id (kept across re-saves / restores)
+    scale: 1,      // display size multiplier (0.5–2); 1 = capped to the video size
   },
 };
 

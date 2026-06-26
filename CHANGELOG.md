@@ -4,6 +4,19 @@ All notable changes to the Video Comparator are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this is a
 single-page browser tool, so "releases" map to batches of work rather than tagged builds.
 
+## [1.6.0] — 2026-06-26
+
+### Added
+- **Reference image scaler**: a thin slider (0.5×–2×) right of the “Comparing A vs B”
+  status, shown only in overlay when a reference image is loaded. 1× caps the reference to
+  the video size; 2× can exceed it. The scale persists with the session and saved
+  comparisons.
+
+### Changed
+- The reference image is capped to the video size by default (1×).
+- The **Reference** button only glows in overlay now — in grid (where the panel is hidden)
+  it no longer lights up after importing clips that carry a reference.
+
 ## [1.5.0] — 2026-06-25
 
 ### Added

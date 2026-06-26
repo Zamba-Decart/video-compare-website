@@ -48,6 +48,8 @@ export const dom = {
   referenceInput: $('reference-input'),
   refDrop: $('ref-drop'),
   refImg: $('ref-img'),
+  refScale: $('ref-scale'),
+  refScaleWrap: $('ref-scale-wrap'),
   refVideoStage: $('ref-video-stage'),
   refVideoLabel: $('ref-video-label'),
   refClear: $('ref-clear'),

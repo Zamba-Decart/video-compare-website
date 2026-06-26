@@ -55,8 +55,10 @@ function updateChrome() {
   const refVisible = refVideoVisible || refImageVisible;
   dom.refVideoBtn.classList.toggle('is-on', refVideoVisible);
   dom.refVideoBtn.textContent = refVideoVisible ? '📌 Unpin Original' : '📌 Pin Original Video';
-  // pin video and reference image are mutually exclusive in the panel → only one button lit
-  dom.referenceBtn.classList.toggle('is-on', S.reference.on && !S.refVideoOn);
+  // pin video and reference image are mutually exclusive in the panel → only one button lit.
+  // Only glow in overlay — in grid the panel is hidden, so a lit/"pinned" button is misleading
+  // (e.g. right after importing clips with a reference attached).
+  dom.referenceBtn.classList.toggle('is-on', overlay && S.reference.on && !S.refVideoOn);
   dom.saveBtn.classList.toggle('save-dirty', unsaved && canOverlay());   // green when the tuple isn't saved
   dom.referencePanel.hidden = !refVisible;
   dom.body.classList.toggle('reference-on', refVisible);
@@ -64,6 +66,12 @@ function updateChrome() {
   dom.refDrop.hidden = refVideoVisible || !!S.reference.url;
   dom.refImg.hidden = refVideoVisible || !S.reference.url;
   dom.refClear.hidden = !refVisible;
+
+  // reference-image size scaler: overlay-only, and only when an actual image is shown.
+  const refImgShown = refImageVisible && !!S.reference.url && !refVideoVisible;
+  dom.refScaleWrap.hidden = !refImgShown;
+  dom.refImg.style.setProperty('--ref-scale', S.reference.scale ?? 1);
+  dom.refScale.value = String(S.reference.scale ?? 1);
 
   // overlay pill availability
   dom.viewOverlayBtn.style.opacity = canOverlay() ? '1' : '0.4';
@@ -266,7 +274,7 @@ function applyRestoredComparison(rec, aId, bId, refData, refVideoSlotId) {
   restoreSeekTime = null;
   // pinned video and reference image are mutually exclusive: if the save pinned a video, load
   // the image (if any) but leave it inactive so the user can still toggle to it.
-  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, !refVideoSlotId);
+  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, !refVideoSlotId, rec.reference?.scale);
   else { clearReferenceImage(); S.reference.on = false; }
   unsaved = false;   // a restored saved comparison IS the saved one
   showOverlay();
@@ -299,7 +307,7 @@ function applyRestoredSession(rec, created, refData) {
   S.refVideoId = resolveSel(rec.refVideoId);
   S.refVideoOn = !!rec.refVideoOn && !!S.refVideoId && S.refVideoId !== S.selA && S.refVideoId !== S.selB;
   applyViewState(rec);
-  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, refData.on);
+  if (refData) restoreReference(refData.blob, refData.name, refData.blobId, refData.on, rec.reference?.scale);
 
   if (rec.view === 'overlay' && canOverlay()) showOverlay();
   else showGrid();
@@ -442,6 +450,7 @@ function loadReferenceImage(file) {
   S.reference.name = file.name;
   S.reference.blobId = blobIdFor(file, file.name);
   S.reference.url = URL.createObjectURL(file);
+  S.reference.scale = 1;   // a freshly loaded reference starts capped to the video
   dom.refImg.src = S.reference.url;
   S.reference.on = true;
   if (S.refVideoOn) {   // loading a reference image overrides the pinned video
@@ -456,7 +465,7 @@ function loadReferenceImage(file) {
 }
 
 // Restore a persisted reference image (preserves its original blobId for re-save consistency).
-function restoreReference(blob, name, blobId, on) {
+function restoreReference(blob, name, blobId, on, scale) {
   if (!blob) return;
   if (S.reference.url) URL.revokeObjectURL(S.reference.url);
   S.reference.file = blob instanceof File ? blob : new File([blob], name || 'reference', { type: blob.type || 'image/png' });
@@ -464,6 +473,7 @@ function restoreReference(blob, name, blobId, on) {
   S.reference.blobId = blobId || blobIdFor(S.reference.file, S.reference.name);
   S.reference.url = URL.createObjectURL(blob);
   S.reference.on = !!on;
+  S.reference.scale = (Number.isFinite(scale) && scale > 0) ? Math.min(2, Math.max(0.5, scale)) : 1;
   dom.refImg.src = S.reference.url;
   syncReferenceUI();
 }
@@ -474,6 +484,7 @@ function clearReferenceImage() {
   S.reference.name = null;
   S.reference.file = null;
   S.reference.blobId = null;
+  S.reference.scale = 1;
   dom.refImg.removeAttribute('src');
   syncReferenceUI();
 }
@@ -632,6 +643,12 @@ function bindToolbar() {
   });
   dom.referenceInput.addEventListener('change', (e) => { loadReferenceImage(e.target.files[0]); dom.referenceInput.value = ''; });
   dom.refClear.addEventListener('click', (e) => { e.stopPropagation(); clearActiveReference(); scheduleSessionSave(); });
+  dom.refScale.addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    S.reference.scale = Number.isFinite(v) ? Math.min(2, Math.max(0.5, v)) : 1;
+    dom.refImg.style.setProperty('--ref-scale', S.reference.scale);
+    scheduleSessionSave();
+  });
   window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
     loadReferenceImage(event.detail?.file);
   });

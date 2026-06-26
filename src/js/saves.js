@@ -49,7 +49,7 @@ async function ensureReference() {
   if (!ref || !ref.file) return null;
   const id = ref.blobId || blobIdFor(ref.file, ref.name);
   const stored = await ensureBlobId(id, ref.file, ref.name);
-  return stored ? { blobId: stored, name: ref.name } : null;
+  return stored ? { blobId: stored, name: ref.name, scale: ref.scale ?? 1 } : null;
 }
 
 // Small gallery thumbnail of the current overlay (ignores zoom/pan/rotate for a clean frame).
