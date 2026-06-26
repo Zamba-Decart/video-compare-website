@@ -132,7 +132,10 @@ function videoLabel(video, index, labels = []) {
 }
 
 function metadataForVideo(video, index, labels = []) {
-  const src = video.currentSrc || video.src || '';
+  const src = video.currentSrc
+    || video.src
+    || video.querySelector('source[src]')?.getAttribute('src')
+    || '';
   if (!src) return null;
 
   const label = videoLabel(video, index, labels);
@@ -194,15 +197,31 @@ function referenceImageForRoot(root) {
   };
 }
 
+function rootHasReferenceImage(root) {
+  return Array.from(root.querySelectorAll('img')).some((img) => {
+    const text = `${img.alt || ''} ${img.title || ''} ${img.getAttribute('aria-label') || ''}`;
+    return /\breference\b/i.test(text);
+  });
+}
+
+// The download button is the "row composite (ref + cells)" control, so the row
+// container holds the reference image AND every cell video. Climbing to the FIRST
+// ancestor with any video stops inside a single cell (→ only one video imported).
+// Instead, climb to the smallest ancestor that holds the whole composite: the
+// reference image, or at least two videos. Fall back to the first video-bearing
+// ancestor if neither materialises.
 function findRowContainer(button) {
   let node = button.parentElement;
+  let firstWithVideo = null;
 
-  for (let depth = 0; node && depth < 10; depth += 1) {
-    if (node.querySelectorAll('video').length > 0) return node;
-    node = node.parentElement;
+  for (let depth = 0; node && depth < 14; depth += 1, node = node.parentElement) {
+    const videoCount = node.querySelectorAll('video').length;
+    if (videoCount === 0) continue;
+    if (!firstWithVideo) firstWithVideo = node;
+    if (videoCount >= 2 || rootHasReferenceImage(node)) return node;
   }
 
-  return document;
+  return firstWithVideo || document;
 }
 
 function extractVideosForButton(button) {

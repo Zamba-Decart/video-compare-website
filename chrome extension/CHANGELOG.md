@@ -1,5 +1,18 @@
 # Changelog — Page Media Importer extension
 
+## 1.1.0 — overlay picker + dashboard tuple fix
+
+- **In-page overlay selector** (`overlay.js`, P2): popup → "Pick videos on the page"
+  draws clickable highlight boxes over every video (numbered 1–4 in click order) and,
+  with "＋ reference image" on, over images (star one as the reference). Open straight
+  into the Comparator. The reliable path on sites with opaque filenames. Tracks scroll
+  and lazily-added videos via a rAF loop; `Esc`/Cancel dismisses. Uses the shared
+  `IMPORT_VIDEO_URLS` pipeline.
+- **Dashboard fix:** the per-row **Compare** button now grabs the *whole tuple* + the
+  reference image. `findRowContainer` climbs to the composite row (reference image, or
+  ≥2 videos) instead of stopping at the first single-video ancestor; `metadataForVideo`
+  also reads a `<source>` child when a `<video>` has no direct `src`.
+
 ## 1.0.0 — Phase 5 / #9, P1
 
 First version. Generalized, any-page MV3 extension that feeds the app's

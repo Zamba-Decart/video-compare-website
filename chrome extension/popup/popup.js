@@ -15,6 +15,8 @@ const els = {
   imageList: document.getElementById('image-list'),
   clearRef: document.getElementById('clear-ref'),
   open: document.getElementById('open'),
+  overlay: document.getElementById('overlay'),
+  overlayHint: document.getElementById('overlay-hint'),
   refresh: document.getElementById('refresh'),
   settings: document.getElementById('settings')
 };
@@ -168,6 +170,8 @@ async function getActiveTab() {
 async function scanPage() {
   setStatus('Scanning page…');
   els.form.hidden = true;
+  els.overlay.hidden = true;
+  els.overlayHint.hidden = true;
 
   const tab = await getActiveTab();
   state.tabId = tab?.id ?? null;
@@ -176,6 +180,10 @@ async function scanPage() {
     setStatus('This page can’t be scanned (browser-internal or extension page). Open a normal web page and try again.', true);
     return;
   }
+
+  // Manual on-page selection is always available once we have a real tab — it's the
+  // reliable path on sites where filenames are meaningless.
+  els.overlay.hidden = false;
 
   let result;
   try {
@@ -193,7 +201,8 @@ async function scanPage() {
   state.images = result?.images || [];
 
   if (!state.videos.length) {
-    setStatus('No videos found on this page. Try scrolling so they load, or rescan.', true);
+    setStatus('No videos auto-detected. Use “Pick videos on the page” below, or scroll so they load and rescan.', true);
+    els.overlayHint.hidden = false;
     els.imagesSection.hidden = true;
     return;
   }
@@ -227,6 +236,16 @@ els.refresh.addEventListener('click', () => {
 });
 
 els.settings.addEventListener('click', () => chrome.runtime.openOptionsPage());
+
+els.overlay.addEventListener('click', async () => {
+  if (!state.tabId) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: state.tabId }, files: ['content/overlay.js'] });
+    window.close(); // hand off to the on-page overlay
+  } catch (error) {
+    setStatus(`Couldn’t start the picker: ${error.message}`, true);
+  }
+});
 
 els.form.addEventListener('submit', (event) => {
   event.preventDefault();

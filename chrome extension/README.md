@@ -32,6 +32,7 @@ click icon → detect.js scans the active tab for media
 | `manifest.json` | MV3 manifest. |
 | `content/dashboard.js` | Static content script on `eval-dashboard.decart.ai`; injects per-row **Compare** buttons (with the extension icon), extracts readable labels + the row's reference image, sends `IMPORT_VIDEO_URLS`. |
 | `content/detect.js` | Injected on click into the active tab; scans `<video>`/`<source>`/`og:video` + `<img>`/`og:image`; returns a media list. Fetches nothing. |
+| `content/overlay.js` | Injected on demand (popup → "Pick videos on the page"); draws clickable highlight boxes over videos/images so you select by pointing — no filenames needed. The reliable path for sites with opaque names. |
 | `popup/` | Picker UI — video checkboxes, image reference star, replace/append mode. |
 | `background/service-worker.js` | Orchestrator: fetch → base64 → find/open the Comparator tab → deliver. |
 | `content/deliver.js` | Injected into the Comparator tab; relays the payload via `window.postMessage` (extImport requires `event.source === window`, so the post must come from the page's own window). |
@@ -50,9 +51,15 @@ reload it too.
 
 ## Usage
 
-Open a page with videos → click the extension icon → tick the clips you want,
-optionally star one image as the reference, choose **Replace** (default — saves the
-current comparison quietly, then clears) or **Add** → **Open in Comparator**.
+**Popup (auto-detect):** open a page with videos → click the extension icon → tick the
+clips you want, optionally star one image as the reference, choose **Replace** (default —
+saves the current comparison quietly, then clears) or **Add** → **Open in Comparator**.
+
+**Pick on the page (overlay):** when filenames are meaningless (most internal tools) the
+list isn't enough. Click **◎ Pick videos on the page** in the popup — the popup closes and
+clickable boxes appear over every video. Click them in the order you want (they're numbered
+1–4); flip on **＋ reference image** to star one image as the reference; then **Open in
+Comparator**. `Esc` or **Cancel** dismisses it. Works on any page.
 
 ## Permissions
 
@@ -72,13 +79,14 @@ current comparison quietly, then clears) or **Add** → **Open in Comparator**.
 - **Auth/cookie-gated media** may 401/403 from the worker's fetch.
 - **No frame-grab thumbnails** yet (videos show their `poster` if present, else a
   placeholder). Same-origin frame capture is a P2 item.
-- One reference image at a time (star one); CSS background images and an in-page
-  click-to-tag overlay are P2.
+- One reference image at a time (star one); CSS background images are P2.
+- The **overlay picker** finds elements that are actual `<video>`/`<img>` nodes; media
+  painted to `<canvas>` or set as CSS backgrounds won't get a box yet.
 
 ## Roadmap (from [ROADMAP.md](../ROADMAP.md) #9)
 
 - **P1 (this):** popup + direct-file `<video src>`/`<source>` grab + base64 handoff + image-as-reference.
-- **P2:** in-page overlay tagging, CSS background images, frame-grab thumbnails.
+- **P2:** in-page overlay tagging ✅ (`overlay.js`); CSS background images, frame-grab thumbnails — still open.
 - **P3:** streamed-media capture/remux.
 
 ## Dashboard integration & prior art
