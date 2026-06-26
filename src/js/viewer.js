@@ -121,7 +121,9 @@ export function renderOverlay() {
   const a = getSlot(S.selA);
   const b = getSlot(S.selB);
   if (!a || !b) return;
-  layoutStageRow();   // keep boxes sized to the video aspect before placing the divider
+  // NOTE: do NOT call layoutStageRow() here — renderOverlay runs on every wipe-slider
+  // frame, and layoutStageRow does layout reads/writes that would thrash + stutter the
+  // drag. Callers invoke layoutStageRow() only when the layout actually changes.
   const va = a.videoEl;
   const vb = b.videoEl;
 

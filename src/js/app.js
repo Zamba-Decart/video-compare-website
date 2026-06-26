@@ -8,8 +8,16 @@ import {
   computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton,
 } from './playback.js';
 import {
-  renderOverlay, mountOverlay, mountReferenceVideo, applyAspectRatio, clearAspectRatio, renderInfoBar,
+  renderOverlay, mountOverlay, mountReferenceVideo, applyAspectRatio, clearAspectRatio, renderInfoBar, layoutStageRow,
 } from './viewer.js';
+
+// Re-fit the overlay boxes (video + reference) then re-place the divider. Use on
+// layout-changing events only (view/meta/reference/scale/resize), never per wipe frame.
+function relayoutOverlay() {
+  if (S.view !== 'overlay') return;
+  layoutStageRow();
+  renderOverlay();
+}
 import { exportCurrentFrame, exportGridFrame } from './export.js';
 import { stripExt } from './helpers.js';
 import {
@@ -48,6 +56,7 @@ function updateChrome() {
   // available in BOTH grid and overlay (whenever videos are loaded) — the reference
   // *upload* must always be reachable (grid uploads, overlay shows the panel).
   [dom.flipHBtn, dom.flipVBtn, dom.rotateBtn, dom.exportBtn, dom.referenceBtn, dom.saveBtn].forEach((b) => { b.hidden = !loaded; });
+  dom.stageResize.hidden = !loaded;   // the vertical media resizer only makes sense with media
 
   // reference panel: overlay-only + only when toggled on
   const refVideoVisible = overlay && S.refVideoOn && getSlot(S.refVideoId);
@@ -121,7 +130,7 @@ function showOverlay() {
   updateChrome();
   renderPickers();
   renderInfoBar();
-  renderOverlay();
+  relayoutOverlay();
   scheduleSessionSave();
 }
 
@@ -141,7 +150,8 @@ function applyOverlayChange() {
     mountOverlay();
     mountReferenceVideo();
     syncActive();
-    renderOverlay();
+    applyAspectRatio();
+    relayoutOverlay();
   } else {
     renderGrid();
   }
@@ -332,7 +342,10 @@ function onSlotsChanged() {
   autoAssign();
   if (hasVideos()) unsaved = true;   // loading/removing clips makes the current set unsaved
   if (S.view === 'overlay' && !canOverlay()) S.view = 'grid';
-  if (S.view === 'grid') renderGrid();
+  // If we're in grid but overlay visuals are still mounted (e.g. an extension import set
+  // view=grid without a full switch), tear them down so the wipe divider doesn't linger.
+  if (S.view === 'grid' && dom.comp.classList.contains('ready')) showGrid();
+  else if (S.view === 'grid') renderGrid();
   computeDuration();
   updateDurationDisplay();
   syncActive();
@@ -354,7 +367,7 @@ function onMeta() {
   // Dimensions are only known once metadata loads — re-apply the aspect ratio so --ar
   // (which sizes the reference panel and the stage cap) reflects the real video, not the
   // landscape fallback. Otherwise a portrait clip gets a too-wide reference panel.
-  if (S.view === 'overlay') { applyAspectRatio(); mountReferenceVideo(); renderOverlay(); }
+  if (S.view === 'overlay') { applyAspectRatio(); mountReferenceVideo(); relayoutOverlay(); }
   // re-apply a restored session's playback position once we actually know durations
   if (restoreSeekTime != null && S.duration > 0) {
     const t = restoreSeekTime;
@@ -445,7 +458,7 @@ function toggleReference() {
   }
   updateChrome();
   scheduleSessionSave();
-  if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }   // stage width changed → re-fit + re-place divider
+  if (S.view === 'overlay') { applyAspectRatio(); relayoutOverlay(); }   // stage width changed → re-fit + re-place divider
 }
 
 function loadReferenceImage(file) {
@@ -466,7 +479,7 @@ function loadReferenceImage(file) {
   syncReferenceUI();
   updateChrome();
   scheduleSessionSave();
-  if (S.view === 'overlay') { applyAspectRatio(); renderOverlay(); }
+  if (S.view === 'overlay') { applyAspectRatio(); relayoutOverlay(); }
 }
 
 // Restore a persisted reference image (preserves its original blobId for re-save consistency).
@@ -652,7 +665,7 @@ function bindToolbar() {
     const v = parseFloat(e.target.value);
     S.reference.scale = Number.isFinite(v) ? Math.min(2, Math.max(0.5, v)) : 1;
     document.documentElement.style.setProperty('--ref-grow', S.reference.scale);
-    if (S.view === 'overlay') renderOverlay();   // panel width changed → re-fit + re-place divider
+    relayoutOverlay();   // panel width changed → re-fit + re-place divider
     scheduleSessionSave();
   });
   window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
@@ -871,9 +884,9 @@ function bindResizeTracking() {
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver(() => { if (S.view === 'overlay') renderOverlay(); });
     ro.observe(dom.stageWrap);
-  } else {
-    window.addEventListener('resize', () => { if (S.view === 'overlay') renderOverlay(); });
   }
+  // window resize changes the row width → re-fit the overlay boxes + reposition the divider
+  window.addEventListener('resize', relayoutOverlay);
 }
 
 // ---------- stage resize (drag the bottom edge to grow/shrink the viewer) -------------
@@ -895,7 +908,7 @@ function bindStageResize() {
   const onMove = (e) => {
     if (!dragging) return;
     applyStageHeight(startH + (e.clientY - startY));
-    if (S.view === 'overlay') renderOverlay();
+    relayoutOverlay();   // height drives the overlay box sizing too
   };
   const onUp = () => {
     if (!dragging) return;
@@ -921,16 +934,16 @@ function bindStageResize() {
 // Dragging right grows the reference panel (video shrinks); left does the opposite.
 function bindMidResize() {
   if (!dom.midResize) return;
-  let startX = 0, naturalW = 1, dragging = false;
+  let startX = 0, startGrow = 1, unit = 320, dragging = false;
   const onMove = (e) => {
     if (!dragging) return;
-    const panelW = dom.referencePanel.getBoundingClientRect().width + (e.clientX - startX);
-    const grow = Math.max(0.5, Math.min(2, panelW / naturalW));
+    // Fixed px-per-unit (the video's width at drag start) keeps the drag linear even
+    // though layoutStageRow shrinks the video as the reference grows.
+    const grow = Math.max(0.5, Math.min(2, startGrow + (e.clientX - startX) / unit));
     S.reference.scale = grow;
     document.documentElement.style.setProperty('--ref-grow', grow);
     dom.refScale.value = String(grow);
-    startX = e.clientX;   // incremental so the panel tracks the cursor 1:1
-    if (S.view === 'overlay') renderOverlay();
+    relayoutOverlay();
   };
   const onUp = () => {
     if (!dragging) return;
@@ -944,8 +957,8 @@ function bindMidResize() {
     e.preventDefault();
     dragging = true;
     startX = e.clientX;
-    const grow = S.reference.scale || 1;
-    naturalW = dom.referencePanel.getBoundingClientRect().width / grow;   // = the video's width
+    startGrow = S.reference.scale || 1;
+    unit = Math.max(160, dom.stageWrap.getBoundingClientRect().width);   // ≈ the video's width
     dom.body.classList.add('resizing-split');
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);

@@ -4,6 +4,21 @@ All notable changes to the Video Comparator are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this is a
 single-page browser tool, so "releases" map to batches of work rather than tagged builds.
 
+## [1.7.1] — 2026-06-26
+
+### Changed
+- **Vertical media resizer moved below the media** (centered, above the transport) instead
+  of overlapping the bottom of the video — always visible, more discoverable.
+- **Right-docked saved panel** is now sticky and viewport-tall, so the list scrolls down to
+  the bottom of the page instead of being clipped by a short content column. Its scrollbar
+  is a slim green bar (was the default white).
+
+### Fixed
+- The green wipe-comparison divider no longer lingers over the grid after importing new
+  clips while in overlay (the overlay is now fully torn down on the drop to grid).
+- Wipe-slider stutter when the reference panel is open: `layoutStageRow` no longer runs on
+  every wipe frame (only on actual layout changes), so dragging the seam is smooth again.
+
 ## [1.7.0] — 2026-06-26
 
 ### Changed

@@ -125,10 +125,19 @@ header {
 /* Saved panel docked to the right: two columns (content | saved sidebar). */
 .main.saves-dock-right { flex-direction: row; align-items: flex-start; }
 .main.saves-dock-right .main-content { flex: 1 1 auto; }
-.main.saves-dock-right .saves-rail { flex: 0 0 290px; width: 290px; align-self: stretch; }
+/* Sticky, viewport-tall rail so the list scrolls down to the bottom of the page
+   instead of being clipped by a short content column. */
+.main.saves-dock-right .saves-rail {
+  flex: 0 0 290px; width: 290px;
+  align-self: flex-start;
+  position: sticky; top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+}
 .main.saves-dock-right .saves-list {
+  flex: 1 1 auto; min-height: 0;
   flex-direction: column; overflow-x: hidden; overflow-y: auto;
-  max-height: calc(100vh - 220px);
+  max-height: none;
 }
 .main.saves-dock-right .save-card { width: 100%; }
 .main.saves-dock-right .saves-hint { display: none; }   /* tight sidebar — drop the hint, cards are clearly clickable */
@@ -433,17 +442,17 @@ body.resizing-split iframe, body.resizing-split video { pointer-events: none; }
   min-height: 240px;
   display: flex; align-items: center; justify-content: center;
 }
-/* draggable bottom edge to resize the viewer */
+/* Vertical media resizer — a centered grip below the media (always visible) */
 .stage-resize {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
-  cursor: ns-resize; z-index: 5;
+  height: 18px; cursor: ns-resize;
   display: flex; align-items: center; justify-content: center;
+  margin: -8px 0 -4px;   /* tuck it just under the media, above the transport */
 }
 .stage-resize::after {
-  content: ''; width: 64px; height: 4px; border-radius: 3px;
+  content: ''; width: 72px; height: 5px; border-radius: 3px;
   background: var(--border2); opacity: 0.7; transition: opacity 0.15s, background 0.15s, width 0.15s;
 }
-.stage-resize:hover::after { opacity: 1; background: var(--acc); width: 88px; }
+.stage-resize:hover::after { opacity: 1; background: var(--acc); width: 104px; }
 body.resizing-stage { cursor: ns-resize; user-select: none; }
 body.resizing-stage iframe, body.resizing-stage video { pointer-events: none; }
 body.is-fullscreen .stage-resize { display: none; }
@@ -763,7 +772,18 @@ body.is-fullscreen .stage-resize { display: none; }
 }
 .saves-list {
   display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
+  /* sleek green scrollbar (Firefox) */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200,240,60,0.55) transparent;
 }
+/* sleek green scrollbar (WebKit) */
+.saves-list::-webkit-scrollbar { width: 8px; height: 8px; }
+.saves-list::-webkit-scrollbar-track { background: transparent; }
+.saves-list::-webkit-scrollbar-thumb {
+  background: rgba(200,240,60,0.5); border-radius: 999px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+.saves-list::-webkit-scrollbar-thumb:hover { background: rgba(200,240,60,0.85); background-clip: padding-box; }
 .save-card {
   position: relative; flex: 0 0 auto;
   width: 150px;
