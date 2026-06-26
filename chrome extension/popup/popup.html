@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open in Video Comparator</title>
+  <link rel="stylesheet" href="./popup.css">
+</head>
+<body>
+  <header>
+    <h1>Video Comparator</h1>
+    <div class="header-actions">
+      <button id="refresh" type="button" title="Re-scan the page">Rescan</button>
+      <button id="settings" type="button" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <main>
+    <button id="widget-toggle" type="button" class="widget-toggle">Toggle video selector widget</button>
+    <p class="widget-hint">Adds a small picker icon to the top-right of every page. Click it to select videos right on the page — no filenames needed.</p>
+
+    <details id="detected">
+      <summary>Pick from detected files</summary>
+      <div id="status" role="status">Scanning page…</div>
+
+      <form id="form" hidden>
+        <section id="videos-section">
+          <div class="section-head">
+            <h2>Videos</h2>
+            <label class="select-all">
+              <input id="select-all" type="checkbox" checked>
+              <span id="video-count"></span>
+            </label>
+          </div>
+          <div id="video-list" class="list"></div>
+        </section>
+
+        <section id="images-section" hidden>
+          <div class="section-head">
+            <h2>Reference image <span class="hint">(optional)</span></h2>
+            <button id="clear-ref" type="button" class="link" hidden>clear</button>
+          </div>
+          <div id="image-list" class="list"></div>
+        </section>
+
+        <button id="open" type="submit">Open in Comparator</button>
+      </form>
+    </details>
+  </main>
+
+  <script src="./popup.js"></script>
+</body>
+</html>

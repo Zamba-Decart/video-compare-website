@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Video Comparator — Page Media Importer",
+  "description": "Grab the videos (and a reference image) from any page and open them in the Video Comparator.",
+  "version": "1.2.0",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Open page media in the Video Comparator",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/widget.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://eval-dashboard.decart.ai/*"],
+      "js": ["content/dashboard.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": false
+  }
+}
