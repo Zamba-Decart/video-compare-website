@@ -310,7 +310,8 @@ function makeImportButton(downloadButton) {
     button.dataset.status = 'working';
     setLabel(button, 'Importing…');
 
-    sendImportMessage({ type: 'IMPORT_VIDEO_URLS', mode: 'replace', videos, referenceImage }, button);
+    // No mode → the service worker applies the Replace/Add choice from settings.
+    sendImportMessage({ type: 'IMPORT_VIDEO_URLS', videos, referenceImage }, button);
   });
 
   return button;

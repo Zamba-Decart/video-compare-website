@@ -1,5 +1,18 @@
 # Changelog — Page Media Importer extension
 
+## 1.2.0 — persistent selector widget + cleaner popup
+
+- **Toggleable on-page widget.** The overlay selector is now a persistent corner icon
+  (top-right of every page) you turn on/off from the popup ("Toggle video selector
+  widget"). Clicking the icon opens the same numbered-box selector; closing the selection
+  leaves the icon in place. `widget.js` runs on `<all_urls>` and reacts to the
+  `widgetEnabled` flag live (no page reload needed). Replaces the one-shot `overlay.js`.
+- **Cleaner popup.** The detected-file list moved into a collapsed "Pick from detected
+  files" dropdown; the widget toggle is the primary action.
+- **Replace is the default and the Replace/Add choice moved to Settings** (`importMode`).
+  The popup, widget, and dashboard buttons all omit `mode`; the service worker applies the
+  setting (default `replace`).
+
 ## 1.1.0 — overlay picker + dashboard tuple fix
 
 - **In-page overlay selector** (`overlay.js`, P2): popup → "Pick videos on the page"

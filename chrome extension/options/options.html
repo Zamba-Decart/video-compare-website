@@ -56,6 +56,18 @@
     </label>
   </fieldset>
 
+  <fieldset>
+    <legend>When opening</legend>
+    <label class="choice">
+      <input type="radio" name="mode" value="replace">
+      <span>Replace current videos<span class="desc">Quietly saves the current comparison, then loads the new set. (Default)</span></span>
+    </label>
+    <label class="choice">
+      <input type="radio" name="mode" value="append">
+      <span>Add to current videos<span class="desc">Keeps what's loaded and appends the new clips.</span></span>
+    </label>
+  </fieldset>
+
   <div class="actions">
     <button id="save" type="button">Save</button>
     <span id="saved">Saved ✓</span>

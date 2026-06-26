@@ -33,6 +33,10 @@ document.querySelectorAll('input[name="dest"]').forEach((radio) => {
   });
 });
 
+function selectedMode() {
+  return document.querySelector('input[name="mode"]:checked')?.value === 'append' ? 'append' : 'replace';
+}
+
 saveBtn.addEventListener('click', async () => {
   const comparatorUrl = urlForDest();
   if (!/^https?:\/\/.+/i.test(comparatorUrl)) {
@@ -41,13 +45,14 @@ saveBtn.addEventListener('click', async () => {
     customInput.reportValidity?.();
     return;
   }
-  await chrome.storage.sync.set({ comparatorUrl });
+  await chrome.storage.sync.set({ comparatorUrl, importMode: selectedMode() });
   savedFlag.classList.add('show');
   setTimeout(() => savedFlag.classList.remove('show'), 1400);
 });
 
 (async function init() {
-  const { comparatorUrl } = await chrome.storage.sync.get('comparatorUrl');
+  const { comparatorUrl, importMode } = await chrome.storage.sync.get(['comparatorUrl', 'importMode']);
+
   if (!comparatorUrl || comparatorUrl === LIVE) {
     setDest('live');
   } else if (comparatorUrl === LOCAL) {
@@ -57,4 +62,8 @@ saveBtn.addEventListener('click', async () => {
     customInput.value = comparatorUrl;
     customInput.disabled = false;
   }
+
+  const mode = importMode === 'append' ? 'append' : 'replace';
+  const modeRadio = document.querySelector(`input[name="mode"][value="${mode}"]`);
+  if (modeRadio) modeRadio.checked = true;
 })();

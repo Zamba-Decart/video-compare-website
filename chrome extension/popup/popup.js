@@ -1,8 +1,11 @@
 // popup.js — drives the picker UI.
 //
-// On open: inject detect.js into the active tab, render the videos (checkboxes)
-// and image candidates (pick one as the reference). On submit: hand the chosen
-// URLs to the service worker, which fetches + delivers them to the Comparator.
+// Primary action: toggle the on-page selector widget (a corner icon on every page).
+// Secondary: a collapsed "Pick from detected files" dropdown that lists media scanned
+// from the active tab. Either way the chosen URLs go to the service worker, which
+// fetches + delivers them to the Comparator.
+
+const WIDGET_KEY = 'widgetEnabled';
 
 const els = {
   status: document.getElementById('status'),
@@ -15,13 +18,12 @@ const els = {
   imageList: document.getElementById('image-list'),
   clearRef: document.getElementById('clear-ref'),
   open: document.getElementById('open'),
-  overlay: document.getElementById('overlay'),
-  overlayHint: document.getElementById('overlay-hint'),
+  widgetToggle: document.getElementById('widget-toggle'),
   refresh: document.getElementById('refresh'),
   settings: document.getElementById('settings')
 };
 
-let state = { tabId: null, videos: [], images: [] };
+let state = { tabId: null, tabUrl: null, videos: [], images: [] };
 
 const RESTRICTED = /^(chrome|edge|brave|about|chrome-extension|moz-extension|view-source|devtools|data):/i;
 
@@ -158,10 +160,6 @@ function selectedReference() {
   return img ? { src: img.src, name: img.name, label: img.alt || 'Reference' } : null;
 }
 
-function selectedMode() {
-  return document.querySelector('input[name="mode"]:checked')?.value || 'replace';
-}
-
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
@@ -170,20 +168,15 @@ async function getActiveTab() {
 async function scanPage() {
   setStatus('Scanning page…');
   els.form.hidden = true;
-  els.overlay.hidden = true;
-  els.overlayHint.hidden = true;
 
   const tab = await getActiveTab();
   state.tabId = tab?.id ?? null;
+  state.tabUrl = tab?.url ?? null;
 
   if (!tab?.url || RESTRICTED.test(tab.url)) {
-    setStatus('This page can’t be scanned (browser-internal or extension page). Open a normal web page and try again.', true);
+    setStatus('This page can’t be scanned (browser-internal or extension page).', true);
     return;
   }
-
-  // Manual on-page selection is always available once we have a real tab — it's the
-  // reliable path on sites where filenames are meaningless.
-  els.overlay.hidden = false;
 
   let result;
   try {
@@ -201,8 +194,7 @@ async function scanPage() {
   state.images = result?.images || [];
 
   if (!state.videos.length) {
-    setStatus('No videos auto-detected. Use “Pick videos on the page” below, or scroll so they load and rescan.', true);
-    els.overlayHint.hidden = false;
+    setStatus('No videos auto-detected — use the widget above, or scroll so they load and rescan.', true);
     els.imagesSection.hidden = true;
     return;
   }
@@ -219,6 +211,35 @@ async function scanPage() {
     setStatus('Found videos, but all are streamed (blob:/HLS) with no grabbable file URL.', true);
   }
 }
+
+// ---- the persistent on-page selector widget -----------------------------
+function reflectWidget(enabled) {
+  els.widgetToggle.classList.toggle('on', enabled);
+  els.widgetToggle.textContent = enabled
+    ? '◉ Video selector widget: ON'
+    : '◎ Toggle video selector widget';
+}
+
+async function initWidgetToggle() {
+  const { [WIDGET_KEY]: enabled } = await chrome.storage.sync.get(WIDGET_KEY);
+  reflectWidget(Boolean(enabled));
+}
+
+els.widgetToggle.addEventListener('click', async () => {
+  const { [WIDGET_KEY]: was } = await chrome.storage.sync.get(WIDGET_KEY);
+  const next = !was;
+  await chrome.storage.sync.set({ [WIDGET_KEY]: next });
+  reflectWidget(next);
+
+  // The widget content script reacts to the storage change live on pages where it's
+  // already loaded. For the current tab (which may predate the extension reload),
+  // make sure it's present — the script guards against double-init.
+  if (next && state.tabId && !(state.tabUrl && RESTRICTED.test(state.tabUrl))) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: state.tabId }, files: ['content/widget.js'] });
+    } catch (_) { /* restricted page — the flag still applies to normal pages */ }
+  }
+});
 
 els.selectAll.addEventListener('change', () => {
   els.videoList.querySelectorAll('input[type="checkbox"]:not(:disabled)')
@@ -237,16 +258,6 @@ els.refresh.addEventListener('click', () => {
 
 els.settings.addEventListener('click', () => chrome.runtime.openOptionsPage());
 
-els.overlay.addEventListener('click', async () => {
-  if (!state.tabId) return;
-  try {
-    await chrome.scripting.executeScript({ target: { tabId: state.tabId }, files: ['content/overlay.js'] });
-    window.close(); // hand off to the on-page overlay
-  } catch (error) {
-    setStatus(`Couldn’t start the picker: ${error.message}`, true);
-  }
-});
-
 els.form.addEventListener('submit', (event) => {
   event.preventDefault();
 
@@ -259,8 +270,9 @@ els.form.addEventListener('submit', (event) => {
   els.open.disabled = true;
   setStatus(`Fetching ${videos.length} video${videos.length === 1 ? '' : 's'}…`);
 
+  // No mode → the service worker applies the Replace/Add choice from settings.
   chrome.runtime.sendMessage(
-    { type: 'IMPORT_VIDEO_URLS', mode: selectedMode(), videos, referenceImage: selectedReference() },
+    { type: 'IMPORT_VIDEO_URLS', videos, referenceImage: selectedReference() },
     (response) => {
       els.open.disabled = false;
       if (chrome.runtime.lastError || !response?.ok) {
@@ -273,4 +285,5 @@ els.form.addEventListener('submit', (event) => {
   );
 });
 
+initWidgetToggle().catch(() => reflectWidget(false));
 scanPage().catch((e) => setStatus(e.message, true));

@@ -17,6 +17,15 @@ async function getComparatorUrl() {
   return DEFAULT_COMPARATOR_URL;
 }
 
+// Replace (default) vs Add — set on the options page. Callers omit `mode` to use it.
+async function getImportMode() {
+  try {
+    const { importMode } = await chrome.storage.sync.get('importMode');
+    if (importMode === 'append' || importMode === 'replace') return importMode;
+  } catch (_) { /* fall through to default */ }
+  return 'replace';
+}
+
 // A chrome.tabs.query match pattern can't include a port, so query broadly by
 // scheme+host and then filter precisely by the full origin+path prefix in JS
 // (origin keeps the port, e.g. http://localhost:8765, so localhost still matches).
@@ -146,6 +155,7 @@ async function importMedia({ videos, referenceImage, mode }) {
     throw new Error('No videos were selected.');
   }
   const comparatorUrl = await getComparatorUrl();
+  const effectiveMode = mode || await getImportMode();
 
   // Open/find the tab and fetch the media concurrently.
   const existing = await findComparatorTab(comparatorUrl);
@@ -158,7 +168,7 @@ async function importMedia({ videos, referenceImage, mode }) {
     fetchReferenceImage(referenceImage)
   ]);
 
-  return deliver(tab, Boolean(existing), comparatorUrl, fetched, mode || 'replace', fetchedReference);
+  return deliver(tab, Boolean(existing), comparatorUrl, fetched, effectiveMode, fetchedReference);
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

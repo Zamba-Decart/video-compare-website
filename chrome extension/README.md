@@ -4,13 +4,19 @@ Grab the videos (and one reference image) from any web page and open them straig
 into the [Video Comparator](../src/index.html). This is **Phase 5 / #9** from the
 [ROADMAP](../ROADMAP.md) — the popup + direct-file path (P1).
 
-It does two things:
+Three ways to pick media:
 
-1. **Any page** — click the toolbar icon, pick clips in the popup, open them.
-2. **Decart eval dashboard** (`eval-dashboard.decart.ai`) — a per-row **Compare** button
-   (with the extension icon) is injected next to each download button, with rich label
-   extraction and reference-image detection. This is the original dashboard integration,
-   folded in here and kept working — it's the **top-priority** path.
+1. **On-page selector widget** (recommended) — toggle it on from the popup; a small icon
+   sits in the top-right of every page. Click it → highlight boxes appear over every
+   video; click them in order (numbered 1–4), optionally star an image as the reference,
+   **Open in Comparator**. No filenames needed — the reliable path for internal tools.
+2. **Popup file list** — the toolbar popup auto-detects media and lists it under a
+   collapsed "Pick from detected files" dropdown (checkboxes + reference star). Handy when
+   names are meaningful.
+3. **Decart eval dashboard** (`eval-dashboard.decart.ai`) — a per-row **Compare** button
+   (with the extension icon) injected next to each download button, with rich label
+   extraction and reference-image detection. Original integration, kept working — the
+   **top-priority** path.
 
 It needs **no changes to the app**: it feeds the existing
 [`src/js/extImport.js`](../src/js/extImport.js) bridge, which listens for
@@ -19,8 +25,7 @@ It needs **no changes to the app**: it feeds the existing
 ## How it works
 
 ```
-click icon → detect.js scans the active tab for media
-           → popup: tick clips, optionally star one image as the reference, pick mode
+widget icon / popup → pick videos (+ optional reference image)
            → service-worker.js fetches each chosen URL (host perms bypass page CORS)
              → base64 data: URLs (the transport extImport.js accepts reliably)
            → opens / focuses the Comparator tab (URL configurable in Settings)
@@ -31,12 +36,12 @@ click icon → detect.js scans the active tab for media
 |------|------|
 | `manifest.json` | MV3 manifest. |
 | `content/dashboard.js` | Static content script on `eval-dashboard.decart.ai`; injects per-row **Compare** buttons (with the extension icon), extracts readable labels + the row's reference image, sends `IMPORT_VIDEO_URLS`. |
-| `content/detect.js` | Injected on click into the active tab; scans `<video>`/`<source>`/`og:video` + `<img>`/`og:image`; returns a media list. Fetches nothing. |
-| `content/overlay.js` | Injected on demand (popup → "Pick videos on the page"); draws clickable highlight boxes over videos/images so you select by pointing — no filenames needed. The reliable path for sites with opaque names. |
-| `popup/` | Picker UI — video checkboxes, image reference star, replace/append mode. |
-| `background/service-worker.js` | Orchestrator: fetch → base64 → find/open the Comparator tab → deliver. |
+| `content/widget.js` | Runs on every page (`<all_urls>`). Shows the corner selector icon when the widget is enabled (storage flag `widgetEnabled`); clicking it opens the in-page selection overlay (numbered boxes over videos/images). Toggled from the popup. |
+| `content/detect.js` | Injected on demand by the popup; scans the active tab for `<video>`/`<source>`/`og:video` + `<img>`/`og:image`; returns a media list. Fetches nothing. |
+| `popup/` | Toggle the widget; collapsed "detected files" list (checkboxes + reference star). |
+| `background/service-worker.js` | Orchestrator: fetch → base64 → find/open the Comparator tab → deliver. Applies the Replace/Add setting. |
 | `content/deliver.js` | Injected into the Comparator tab; relays the payload via `window.postMessage` (extImport requires `event.source === window`, so the post must come from the page's own window). |
-| `options/` | Set the Comparator destination URL (live / localhost / custom). |
+| `options/` | Comparator destination URL (live / localhost / custom) + Replace/Add mode. |
 
 ## Install (load unpacked)
 
@@ -51,22 +56,26 @@ reload it too.
 
 ## Usage
 
-**Popup (auto-detect):** open a page with videos → click the extension icon → tick the
-clips you want, optionally star one image as the reference, choose **Replace** (default —
-saves the current comparison quietly, then clears) or **Add** → **Open in Comparator**.
+**Selector widget (recommended):** click the toolbar icon → **Toggle video selector
+widget**. A small icon appears in the top-right corner of every page (and stays there
+until you toggle it off). Click that icon on any page → clickable boxes appear over every
+video; click them in the order you want (numbered 1–4); flip on **＋ reference image** to
+star one image as the reference; then **Open in Comparator**. `Esc` or **Cancel** closes
+the selection (the corner icon stays).
 
-**Pick on the page (overlay):** when filenames are meaningless (most internal tools) the
-list isn't enough. Click **◎ Pick videos on the page** in the popup — the popup closes and
-clickable boxes appear over every video. Click them in the order you want (they're numbered
-1–4); flip on **＋ reference image** to star one image as the reference; then **Open in
-Comparator**. `Esc` or **Cancel** dismisses it. Works on any page.
+**Popup file list:** in the toolbar popup, expand **Pick from detected files** to tick
+auto-detected clips and star a reference, then **Open in Comparator**. Best when filenames
+are meaningful.
+
+**Replace vs Add** and the **destination URL** live in **⚙ Settings**. Default is Replace
+(quietly saves the current comparison, then loads the new set).
 
 ## Permissions
 
 - `activeTab` + `scripting` — inject `detect.js` into the page you're on, and
   `deliver.js` into the Comparator tab.
 - `tabs` — find/open/focus the Comparator tab.
-- `storage` — remember the destination URL.
+- `storage` — remember the destination URL, Replace/Add mode, and whether the widget is on.
 - `host_permissions: <all_urls>` — the **load-bearing** one: lets the service worker
   `fetch()` cross-origin media files (the page's own CORS doesn't apply to the worker).
   Appropriate for an internal team tool; it's what a Web Store review would scrutinise.
@@ -80,13 +89,15 @@ Comparator**. `Esc` or **Cancel** dismisses it. Works on any page.
 - **No frame-grab thumbnails** yet (videos show their `poster` if present, else a
   placeholder). Same-origin frame capture is a P2 item.
 - One reference image at a time (star one); CSS background images are P2.
-- The **overlay picker** finds elements that are actual `<video>`/`<img>` nodes; media
+- The **selector widget** finds elements that are actual `<video>`/`<img>` nodes; media
   painted to `<canvas>` or set as CSS backgrounds won't get a box yet.
+- The widget runs on `<all_urls>` and shows its corner icon on every page while enabled;
+  toggle it off in the popup when you don't need it.
 
 ## Roadmap (from [ROADMAP.md](../ROADMAP.md) #9)
 
 - **P1 (this):** popup + direct-file `<video src>`/`<source>` grab + base64 handoff + image-as-reference.
-- **P2:** in-page overlay tagging ✅ (`overlay.js`); CSS background images, frame-grab thumbnails — still open.
+- **P2:** in-page overlay tagging ✅ (now the persistent `widget.js`); CSS background images, frame-grab thumbnails — still open.
 - **P3:** streamed-media capture/remux.
 
 ## Dashboard integration & prior art
