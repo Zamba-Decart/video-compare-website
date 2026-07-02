@@ -121,6 +121,29 @@ Effort key: **S** ≈ <1h · **M** ≈ a few hours · **L** ≈ a day+ / its own
 
 ---
 
+## Phase 6 — Cluster deployment + metadata-aware loading  · **PLANNED**
+
+### #10 — Serve clips (and true timing metadata) straight from the cluster
+
+- **Why:** eval-pipeline outputs are muxed at the wrong FPS (`pretrain-evaluations/generation/generator.py`
+  stamps the dataset CSV's `fps` — e.g. 256 frames sampled at ~16 fps muxed as 20 fps → 12.8 s file for
+  16.33 s of content). Time-based sync can never align those files; and downloading tuples by hand is tedious.
+  The `⚖ Normalize` mode (shipped alongside this note) compensates client-side **when clips cover the same
+  content span** — it can't help when the input is much longer than the generated window, and it guesses
+  rather than knows.
+- **What:** deploy the comparator on the cluster (pm2, port 8085 free; static site — trivial) plus a small
+  service that (a) lists/serves clips from eval output dirs, and (b) runs `ffprobe` server-side to return
+  *true* timing metadata (frame count, mux fps, inferred real duration / sampling fps) as JSON next to each
+  clip. The comparator loads clips by URL and retimes each slot from the metadata instead of guessing.
+- **Pieces:** cluster pm2 app + tiny API (Node or Python, like the video-notes server); comparator: "load
+  from URL/cluster" intake path (slots currently assume `File`/blob — object URLs already work, so mostly
+  plumbing) + per-slot timing override consumed by `playback.js`'s `targetTimeFor`/`rateFor`.
+- **Also:** report the mux-fps bug to the `pretrain-evaluations` owners — evidence: outputs are always
+  256 frames @ 20 fps = 12.8 s regardless of input span; `h5op2qbk` tuple input is 16.33 s ⇒ true rate
+  ≈ 15.7 fps ≈ the model's 16 fps sampling.
+
+---
+
 ## Suggested order
 
 1. ~~**Phase 1** (#5, #7, #8, #4)~~ — ✅ shipped (PR #2).

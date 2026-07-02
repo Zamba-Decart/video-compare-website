@@ -76,6 +76,7 @@ export const dom = {
   loopBtn: $('loop-btn'),
   autoplayBtn: $('autoplay-btn'),
   muteBtn: $('mute-btn'),
+  normBtn: $('norm-btn'),
   rateSelect: $('rate-select'),
   fpsInput: $('fps-input'),
 

@@ -278,7 +278,7 @@ export async function saveSessionNow() {
       reference: refDesc ? { ...refDesc, on: S.reference.on } : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
-      loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, curTime: S.curTime,
+      loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, normSync: S.normSync, curTime: S.curTime,
       workspaceName: S.workspaceName || '',
     };
     if (gen !== wipeGen) return;

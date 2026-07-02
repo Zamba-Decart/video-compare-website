@@ -33,6 +33,7 @@ export const S = {
   muted: true,
   rate: 1,
   fps: 30,
+  normSync: false,     // duration-normalized sync: scale playbackRate so all clips start/end together
   duration: 0,         // master timeline length = max duration of active videos
   curTime: 0,          // last known master time
   scrubbing: false,

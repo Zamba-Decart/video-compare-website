@@ -82,9 +82,18 @@ export function seekFraction(frac) {
   seek(frac * (S.duration || computeDuration()));
 }
 
+// Master time -> this video's time. With normalized sync, each clip is stretched to
+// span the master timeline (fixes clips muxed at the wrong FPS: same content, wrong duration).
+function targetTimeFor(v, t) {
+  if (S.normSync && S.duration > 0 && v.duration > 0) {
+    return Math.min((t / S.duration) * v.duration, v.duration);
+  }
+  return Math.min(t, v.duration || t);
+}
+
 function syncTimes(t) {
   activeVideos().forEach((v) => {
-    const target = Math.min(t, v.duration || t);
+    const target = targetTimeFor(v, t);
     if (Math.abs(v.currentTime - target) > 0.001) {
       try { v.currentTime = target; } catch (e) { /* noop */ }
     }
@@ -103,8 +112,25 @@ export function frameStep(dir) {
 export function applyMuteRate() {
   activeVideos().forEach((v) => {
     v.muted = S.muted;
-    v.playbackRate = S.rate;
+    v.playbackRate = rateFor(v);
   });
+}
+
+// With normalized sync, a clip shorter than the master timeline plays proportionally
+// slower (and vice versa) so every clip traverses its full content over the same span.
+function rateFor(v) {
+  if (S.normSync && S.duration > 0 && isFinite(v.duration) && v.duration > 0) {
+    return S.rate * (v.duration / S.duration);
+  }
+  return S.rate;
+}
+
+export function setNormSync(on) {
+  S.normSync = on;
+  computeDuration();
+  applyMuteRate();
+  syncTimes(S.curTime);
+  updateOptionButtons();
 }
 
 export function setMuted(m) {
@@ -176,7 +202,7 @@ function startClock() {
         lastDrift = now;
         activeVideos().forEach((v) => {
           if (v === prim) return;
-          const target = Math.min(S.curTime, v.duration || S.curTime);
+          const target = targetTimeFor(v, S.curTime);
           if (Math.abs(v.currentTime - target) > DRIFT_TOLERANCE && !v.seeking) {
             try { v.currentTime = target; } catch (e) { /* noop */ }
           }
@@ -190,7 +216,7 @@ function startClock() {
 }
 
 function allEndedOrAtEnd(dur) {
-  return timelineVideos().every((v) => v.ended || (v.currentTime >= Math.min(v.duration || dur, dur) - 0.06));
+  return timelineVideos().every((v) => v.ended || (v.currentTime >= targetTimeFor(v, dur) - 0.06));
 }
 
 function stopClock() {
@@ -220,4 +246,5 @@ export function updateOptionButtons() {
   dom.autoplayBtn.classList.toggle('on', S.autoplay);
   dom.muteBtn.classList.toggle('on', !S.muted);
   dom.muteBtn.textContent = S.muted ? '🔇 Muted' : '🔊 Sound';
+  if (dom.normBtn) dom.normBtn.classList.toggle('on', S.normSync);
 }

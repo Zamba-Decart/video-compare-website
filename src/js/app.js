@@ -4,7 +4,7 @@ import { initLoaders, openPicker, removeSlot, addFiles, blobIdFor } from './load
 import { initGrid, renderGrid, applyGridTransforms } from './grid.js';
 import {
   play, pause, togglePlay, seek, seekFraction, frameStep,
-  setMuted, setLoop, setAutoplay, setRate, syncActive,
+  setMuted, setLoop, setAutoplay, setRate, setNormSync, syncActive,
   computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton,
 } from './playback.js';
 import {
@@ -302,6 +302,7 @@ function applyRestoredSession(rec, created, refData) {
   S.muted = rec.muted !== false;
   S.rate = Number.isFinite(rec.rate) ? rec.rate : 1;
   S.fps = Number.isFinite(rec.fps) ? rec.fps : 30;
+  S.normSync = !!rec.normSync;
   S.curTime = Number.isFinite(rec.curTime) ? rec.curTime : 0;
   dom.rateSelect.value = String(S.rate);
   dom.fpsInput.value = String(S.fps);
@@ -823,6 +824,7 @@ function bindTransport() {
   dom.loopBtn.addEventListener('click', () => { setLoop(!S.loop); scheduleSessionSave(); });
   dom.autoplayBtn.addEventListener('click', () => { setAutoplay(!S.autoplay); scheduleSessionSave(); });
   dom.muteBtn.addEventListener('click', () => { setMuted(!S.muted); scheduleSessionSave(); });
+  dom.normBtn.addEventListener('click', () => { setNormSync(!S.normSync); scheduleSessionSave(); });
   dom.rateSelect.addEventListener('change', () => { setRate(parseFloat(dom.rateSelect.value)); scheduleSessionSave(); });
   dom.fpsInput.addEventListener('change', () => { S.fps = Math.max(1, Math.min(120, parseInt(dom.fpsInput.value, 10) || 30)); scheduleSessionSave(); });
 }
@@ -847,6 +849,7 @@ function bindKeyboard() {
     else if (k === '+' || e.key === '=') { e.preventDefault(); const r = dom.stageWrap.getBoundingClientRect(); zoomBy(0.2, r.left + r.width / 2, r.top + r.height / 2); }
     else if (k === '-' || e.key === '_') { e.preventDefault(); const r = dom.stageWrap.getBoundingClientRect(); zoomBy(-0.2, r.left + r.width / 2, r.top + r.height / 2); }
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
+    else if (k === 'n') { e.preventDefault(); setNormSync(!S.normSync); scheduleSessionSave(); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e') { e.preventDefault(); exportCurrentView(); }
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }

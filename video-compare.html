@@ -1011,6 +1011,7 @@ body.is-fullscreen .stage-wrap {
     <button class="t-toggle" id="loop-btn" title="Loop (L)">🔁 Loop</button>
     <button class="t-toggle on" id="autoplay-btn" title="Autoplay">⏯ Autoplay</button>
     <button class="t-toggle" id="mute-btn" title="Mute (M)">🔇 Muted</button>
+    <button class="t-toggle" id="norm-btn" title="Normalize durations (N): stretch each clip's playback speed so all clips start and end together — fixes clips encoded at the wrong FPS">⚖ Normalize</button>
 
     <select class="t-rate" id="rate-select" title="Playback speed">
       <option value="0.25">0.25×</option>
@@ -1046,6 +1047,7 @@ body.is-fullscreen .stage-wrap {
         <div><span class="kbd">S D T</span> slider / dissolve / toggle</div>
         <div><span class="kbd">← →</span> scrub <em>(Shift = ±5s)</em></div>
         <div><span class="kbd">[ ]</span> cycle clip B <em>(Shift = A)</em></div>
+        <div><span class="kbd">N</span> normalize durations</div>
         <div><span class="kbd">wheel</span> zoom to cursor</div>
         <div><span class="kbd">shift + drag</span> pan</div>
         <div><span class="kbd">+ −</span> zoom in / out</div>
@@ -1163,6 +1165,7 @@ const S = {
   muted: true,
   rate: 1,
   fps: 30,
+  normSync: false,     // duration-normalized sync: scale playbackRate so all clips start/end together
   duration: 0,         // master timeline length = max duration of active videos
   curTime: 0,          // last known master time
   scrubbing: false,
@@ -1270,6 +1273,7 @@ const dom = {
   loopBtn: $('loop-btn'),
   autoplayBtn: $('autoplay-btn'),
   muteBtn: $('mute-btn'),
+  normBtn: $('norm-btn'),
   rateSelect: $('rate-select'),
   fpsInput: $('fps-input'),
 
@@ -1587,9 +1591,18 @@ function seekFraction(frac) {
   seek(frac * (S.duration || computeDuration()));
 }
 
+// Master time -> this video's time. With normalized sync, each clip is stretched to
+// span the master timeline (fixes clips muxed at the wrong FPS: same content, wrong duration).
+function targetTimeFor(v, t) {
+  if (S.normSync && S.duration > 0 && v.duration > 0) {
+    return Math.min((t / S.duration) * v.duration, v.duration);
+  }
+  return Math.min(t, v.duration || t);
+}
+
 function syncTimes(t) {
   activeVideos().forEach((v) => {
-    const target = Math.min(t, v.duration || t);
+    const target = targetTimeFor(v, t);
     if (Math.abs(v.currentTime - target) > 0.001) {
       try { v.currentTime = target; } catch (e) { /* noop */ }
     }
@@ -1608,8 +1621,25 @@ function frameStep(dir) {
 function applyMuteRate() {
   activeVideos().forEach((v) => {
     v.muted = S.muted;
-    v.playbackRate = S.rate;
+    v.playbackRate = rateFor(v);
   });
+}
+
+// With normalized sync, a clip shorter than the master timeline plays proportionally
+// slower (and vice versa) so every clip traverses its full content over the same span.
+function rateFor(v) {
+  if (S.normSync && S.duration > 0 && isFinite(v.duration) && v.duration > 0) {
+    return S.rate * (v.duration / S.duration);
+  }
+  return S.rate;
+}
+
+function setNormSync(on) {
+  S.normSync = on;
+  computeDuration();
+  applyMuteRate();
+  syncTimes(S.curTime);
+  updateOptionButtons();
 }
 
 function setMuted(m) {
@@ -1681,7 +1711,7 @@ function startClock() {
         lastDrift = now;
         activeVideos().forEach((v) => {
           if (v === prim) return;
-          const target = Math.min(S.curTime, v.duration || S.curTime);
+          const target = targetTimeFor(v, S.curTime);
           if (Math.abs(v.currentTime - target) > DRIFT_TOLERANCE && !v.seeking) {
             try { v.currentTime = target; } catch (e) { /* noop */ }
           }
@@ -1695,7 +1725,7 @@ function startClock() {
 }
 
 function allEndedOrAtEnd(dur) {
-  return timelineVideos().every((v) => v.ended || (v.currentTime >= Math.min(v.duration || dur, dur) - 0.06));
+  return timelineVideos().every((v) => v.ended || (v.currentTime >= targetTimeFor(v, dur) - 0.06));
 }
 
 function stopClock() {
@@ -1725,9 +1755,10 @@ function updateOptionButtons() {
   dom.autoplayBtn.classList.toggle('on', S.autoplay);
   dom.muteBtn.classList.toggle('on', !S.muted);
   dom.muteBtn.textContent = S.muted ? '🔇 Muted' : '🔊 Sound';
+  if (dom.normBtn) dom.normBtn.classList.toggle('on', S.normSync);
 }
 
-  return { getActiveSlots, computeDuration, play, pause, togglePlay, seek, seekFraction, frameStep, applyMuteRate, setMuted, setLoop, setAutoplay, setRate, syncActive, updatePlayButton, updateScrub, updateDurationDisplay, updateOptionButtons };
+  return { getActiveSlots, computeDuration, play, pause, togglePlay, seek, seekFraction, frameStep, applyMuteRate, setNormSync, setMuted, setLoop, setAutoplay, setRate, syncActive, updatePlayButton, updateScrub, updateDurationDisplay, updateOptionButtons };
 })();
 
 const __m_viewer = (function () {
@@ -2465,7 +2496,7 @@ async function saveSessionNow() {
       reference: refDesc ? { ...refDesc, on: S.reference.on } : null,
       view: S.view, mode: S.mode, pos: S.pos, dissolve: S.dissolve, toggleFrame: S.toggleFrame,
       zoom: S.zoom, panX: S.panX, panY: S.panY, rotation: S.rotation, flipH: S.flipH, flipV: S.flipV,
-      loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, curTime: S.curTime,
+      loop: S.loop, autoplay: S.autoplay, muted: S.muted, rate: S.rate, fps: S.fps, normSync: S.normSync, curTime: S.curTime,
       workspaceName: S.workspaceName || '',
     };
     if (gen !== wipeGen) return;
@@ -2751,7 +2782,7 @@ const __m_app = (function () {
   const { dom } = __m_dom;
   const { initLoaders, openPicker, removeSlot, addFiles, blobIdFor } = __m_loaders;
   const { initGrid, renderGrid, applyGridTransforms } = __m_grid;
-  const { play, pause, togglePlay, seek, seekFraction, frameStep, setMuted, setLoop, setAutoplay, setRate, syncActive, computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton } = __m_playback;
+  const { play, pause, togglePlay, seek, seekFraction, frameStep, setMuted, setLoop, setAutoplay, setRate, setNormSync, syncActive, computeDuration, updateScrub, updateDurationDisplay, updateOptionButtons, updatePlayButton } = __m_playback;
   const { renderOverlay, mountOverlay, mountReferenceVideo, applyAspectRatio, clearAspectRatio, renderInfoBar, layoutStageRow } = __m_viewer;
   const { exportCurrentFrame, exportGridFrame } = __m_export;
   const { stripExt } = __m_helpers;
@@ -3052,6 +3083,7 @@ function applyRestoredSession(rec, created, refData) {
   S.muted = rec.muted !== false;
   S.rate = Number.isFinite(rec.rate) ? rec.rate : 1;
   S.fps = Number.isFinite(rec.fps) ? rec.fps : 30;
+  S.normSync = !!rec.normSync;
   S.curTime = Number.isFinite(rec.curTime) ? rec.curTime : 0;
   dom.rateSelect.value = String(S.rate);
   dom.fpsInput.value = String(S.fps);
@@ -3573,6 +3605,7 @@ function bindTransport() {
   dom.loopBtn.addEventListener('click', () => { setLoop(!S.loop); scheduleSessionSave(); });
   dom.autoplayBtn.addEventListener('click', () => { setAutoplay(!S.autoplay); scheduleSessionSave(); });
   dom.muteBtn.addEventListener('click', () => { setMuted(!S.muted); scheduleSessionSave(); });
+  dom.normBtn.addEventListener('click', () => { setNormSync(!S.normSync); scheduleSessionSave(); });
   dom.rateSelect.addEventListener('change', () => { setRate(parseFloat(dom.rateSelect.value)); scheduleSessionSave(); });
   dom.fpsInput.addEventListener('change', () => { S.fps = Math.max(1, Math.min(120, parseInt(dom.fpsInput.value, 10) || 30)); scheduleSessionSave(); });
 }
@@ -3597,6 +3630,7 @@ function bindKeyboard() {
     else if (k === '+' || e.key === '=') { e.preventDefault(); const r = dom.stageWrap.getBoundingClientRect(); zoomBy(0.2, r.left + r.width / 2, r.top + r.height / 2); }
     else if (k === '-' || e.key === '_') { e.preventDefault(); const r = dom.stageWrap.getBoundingClientRect(); zoomBy(-0.2, r.left + r.width / 2, r.top + r.height / 2); }
     else if (k === 'm') { e.preventDefault(); setMuted(!S.muted); }
+    else if (k === 'n') { e.preventDefault(); setNormSync(!S.normSync); scheduleSessionSave(); }
     else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
     else if (k === 'e') { e.preventDefault(); exportCurrentView(); }
     else if (e.code === 'BracketRight') { e.preventDefault(); cycleSide(e.shiftKey ? 'a' : 'b', 1); }
