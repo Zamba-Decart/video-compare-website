@@ -67,7 +67,7 @@
 
   // ---- selector overlay (click boxes over media) --------------------------
   function createOverlay(onClose) {
-    const MAX_CLIPS = 4;
+    const MAX_CLIPS = 10;
     const videoSrc = (v) => v.currentSrc || v.getAttribute('src') || v.querySelector('source[src]')?.src || '';
     const imageSrc = (img) => img.currentSrc || img.getAttribute('src') || '';
     const extFromUrl = (url, fallback) => {
