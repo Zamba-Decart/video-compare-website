@@ -29,7 +29,7 @@ export function applyGridTransforms() {
 export function renderGrid() {
   const grid = dom.videoGrid;
   grid.innerHTML = '';
-  grid.className = 'video-grid on count-' + Math.min(Math.max(S.slots.length, 1), 4);
+  grid.className = 'video-grid on count-' + Math.min(Math.max(S.slots.length, 1), 10);
 
   S.slots.forEach((slot) => {
     const tile = document.createElement('div');

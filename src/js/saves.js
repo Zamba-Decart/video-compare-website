@@ -203,7 +203,7 @@ async function restoreSave(id) {
   }
 
   // Restoring opens the comparison FRESH, so clear the current workspace first. Otherwise the
-  // saved clips load on top of whatever's already loaded and hit the MAX_SLOTS (4) cap —
+  // saved clips load on top of whatever's already loaded and hit the MAX_SLOTS cap —
   // addBlobSlot then returns null for the overflow clip, which we'd misreport as "data missing".
   // A normal save auto-clears the workspace; an imported session leaves it populated, which is
   // what exposed this (older saves whose clips weren't already loaded failed to restore).

@@ -498,6 +498,9 @@ body.is-fullscreen .stage-resize { display: none; }
 .video-grid.count-2 { grid-template-columns: 1fr 1fr; }
 .video-grid.count-3 { grid-template-columns: 1fr 1fr 1fr; }
 .video-grid.count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.video-grid.count-5, .video-grid.count-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.video-grid.count-7, .video-grid.count-8, .video-grid.count-9 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+.video-grid.count-10 { grid-template-columns: 1fr 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
 
 .tile {
   position: relative;
@@ -854,7 +857,10 @@ body.is-fullscreen .stage-wrap {
 
 @media (max-width: 760px) {
   header, .main { padding-left: 18px; padding-right: 18px; }
-  .video-grid.count-3, .video-grid.count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: auto; }
+  .video-grid.count-3, .video-grid.count-4, .video-grid.count-5, .video-grid.count-6,
+  .video-grid.count-7, .video-grid.count-8, .video-grid.count-9, .video-grid.count-10 {
+    grid-template-columns: 1fr 1fr; grid-template-rows: auto;
+  }
   .kbd-hints { display: none; }
 }
 
@@ -895,7 +901,7 @@ body.is-fullscreen .stage-wrap {
     <input type="file" accept="video/*,image/*" id="file-input" multiple>
     <div class="dz-inner" id="dz-inner">
       <div class="dz-icon">↑</div>
-      <div class="dz-label">Drop up to 4 videos here<br>or click to browse</div>
+      <div class="dz-label">Drop up to 10 videos here<br>or click to browse</div>
       <span class="dz-tag">mp4 · webm · mov</span>
       <span class="dz-hint">＋ drop an image to set it as the reference</span>
     </div>
@@ -1184,7 +1190,8 @@ const S = {
   },
 };
 
-const MAX_SLOTS = 4;
+// 9 uploaded clips + 1 source-of-truth (pinned reference) video.
+const MAX_SLOTS = 10;
 
 function getSlot(id) {
   return S.slots.find((s) => s.id === id) || null;
@@ -1998,7 +2005,7 @@ function applyGridTransforms() {
 function renderGrid() {
   const grid = dom.videoGrid;
   grid.innerHTML = '';
-  grid.className = 'video-grid on count-' + Math.min(Math.max(S.slots.length, 1), 4);
+  grid.className = 'video-grid on count-' + Math.min(Math.max(S.slots.length, 1), 10);
 
   S.slots.forEach((slot) => {
     const tile = document.createElement('div');
@@ -2421,7 +2428,7 @@ async function restoreSave(id) {
   }
 
   // Restoring opens the comparison FRESH, so clear the current workspace first. Otherwise the
-  // saved clips load on top of whatever's already loaded and hit the MAX_SLOTS (4) cap —
+  // saved clips load on top of whatever's already loaded and hit the MAX_SLOTS cap —
   // addBlobSlot then returns null for the overflow clip, which we'd misreport as "data missing".
   // A normal save auto-clears the workspace; an imported session leaves it populated, which is
   // what exposed this (older saves whose clips weren't already loaded failed to restore).

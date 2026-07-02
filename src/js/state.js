@@ -52,7 +52,8 @@ export const S = {
   },
 };
 
-export const MAX_SLOTS = 4;
+// 9 uploaded clips + 1 source-of-truth (pinned reference) video.
+export const MAX_SLOTS = 10;
 
 export function getSlot(id) {
   return S.slots.find((s) => s.id === id) || null;
