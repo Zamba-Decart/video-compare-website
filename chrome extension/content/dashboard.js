@@ -151,7 +151,13 @@ function modelLabelFromUrl(url) {
 }
 
 function metadataForVideo(video, index, labels = []) {
-  let src = video.currentSrc
+  // Sites can opt in explicitly (eval-viewer does — its tiles are lazy and have no
+  // src until scrolled into view) by stamping the asset URL + clip name on the element.
+  const dataUrl = video.dataset?.vcUrl || '';
+  const dataName = video.dataset?.vcName || '';
+
+  let src = dataUrl
+    || video.currentSrc
     || video.getAttribute('src')
     || video.querySelector('source[src]')?.getAttribute('src')
     || '';
@@ -161,7 +167,7 @@ function metadataForVideo(video, index, labels = []) {
   const absolute = new URL(src, location.href).href;
   const model = modelLabelFromUrl(absolute);
 
-  const label = model || videoLabel(video, index, labels);
+  const label = dataName.replace(/\.[a-z0-9]{2,5}$/i, '') || model || videoLabel(video, index, labels);
   const fallback = filenameFromUrl(src, `video-${index + 1}.mp4`);
   const hasExtension = /\.[a-z0-9]{2,5}$/i.test(label);
   const name = hasExtension ? safeName(label, fallback) : `${safeName(label, fallback)}.mp4`;
