@@ -385,7 +385,8 @@ body.resizing-split iframe, body.resizing-split video { pointer-events: none; }
   pointer-events: none; padding: 24px; text-align: center;
 }
 .ref-img {
-  max-width: 100%; max-height: 100%;
+  /* the panel hugs the image's aspect ratio (layoutStageRow), so fill it */
+  width: 100%; height: 100%;
   object-fit: contain; display: block; user-select: none;
 }
 .ref-video-stage {
@@ -593,6 +594,20 @@ body.is-fullscreen .stage-resize { display: none; }
 }
 #lbl-a { left: 13px; background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.12); color: #fff; }
 #lbl-b { right: 13px; background: rgba(200,240,60,0.9); color: #111; }
+
+/* Subtle A/B side markers in the bottom corners of the compare — easy to lose track
+   of which side is which mid-comparison. */
+.corner-tag {
+  position: absolute; bottom: 10px;
+  width: 22px; height: 22px; border-radius: 6px;
+  display: none; align-items: center; justify-content: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  background: rgba(0,0,0,0.55);
+  z-index: 15; pointer-events: none; opacity: 0.6;
+}
+#corner-a { left: 10px; color: var(--acc); border: 1px solid rgba(200,240,60,0.45); }
+#corner-b { right: 10px; color: var(--acc2); border: 1px solid rgba(96,184,255,0.45); }
 
 #toggle-hint {
   position: absolute; bottom: 14px; left: 50%;

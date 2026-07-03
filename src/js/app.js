@@ -669,6 +669,9 @@ function bindToolbar() {
     relayoutOverlay();   // panel width changed → re-fit + re-place divider
     scheduleSessionSave();
   });
+  // The panel is sized to the image's natural aspect ratio, which is only known
+  // once the image loads — re-fit the row then.
+  dom.refImg.addEventListener('load', relayoutOverlay);
   window.addEventListener('LOAD_REFERENCE_IMAGE', (event) => {
     loadReferenceImage(event.detail?.file);
   });

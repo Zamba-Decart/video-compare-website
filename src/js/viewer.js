@@ -33,10 +33,11 @@ function setSize(el, w, h) {
   if (el.style.height !== hp) el.style.height = hp;
 }
 
-// In overlay WITH the reference panel, size the video box and the reference box to the
-// video's aspect ratio (so the video fills its box — no letterbox, divider stays welded),
-// scaling the reference by --ref-grow. Height is clamped so video + reference + handle fit
-// the row width (prevents landscape overflow); the result is centered in the row.
+// In overlay WITH the reference panel, size the video box to the video's aspect ratio
+// (so the video fills its box — no letterbox, divider stays welded) and the reference box
+// to the REFERENCE content's own aspect ratio, with --ref-grow scaling the reference's
+// height — so the slider actually scales the image, not just the card around it. Height
+// is clamped so video + reference + handle fit the row width; the result is centered.
 export function layoutStageRow() {
   const refOn = S.view === 'overlay' && document.body.classList.contains('reference-on');
   if (!refOn) { clearStageRowSizing(); return; }
@@ -44,16 +45,30 @@ export function layoutStageRow() {
   const a = getSlot(S.selA);
   const ar = (a && a.w && a.h) ? a.w / a.h : 1.78;
   const grow = S.reference.scale || 1;
+
+  // aspect of what's actually in the panel: pinned ref video > ref image > the video's ar
+  let refAr = ar;
+  if (S.refVideoOn) {
+    const rv = getSlot(S.refVideoId);
+    if (rv && rv.w && rv.h) refAr = rv.w / rv.h;
+  } else if (dom.refImg && dom.refImg.naturalWidth && dom.refImg.naturalHeight) {
+    refAr = dom.refImg.naturalWidth / dom.refImg.naturalHeight;
+  }
+
   const rowW = dom.stageRow.clientWidth;
   const reserve = 48;   // stage-row gap + mid handle + a little slack (avoid sub-px overflow)
   const prefH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stage-h')) || 460;
-  const maxH = Math.min(prefH, window.innerHeight * 0.78);
-  const fitH = (rowW - reserve) / (ar * (1 + grow));
+  const viewH = window.innerHeight * 0.78 || prefH;   // innerHeight can read 0 mid-layout
+  const maxH = Math.min(prefH, viewH);
+  const fitH = (rowW - reserve) / (ar + grow * refAr);
   const H = Math.round(Math.max(160, Math.min(maxH, fitH)));
   const videoW = Math.round(H * ar);
+  // the reference may outgrow the stage height (that's the point of the slider) —
+  // clamp it to the viewport, not to the video's preferred height
+  const refH = Math.round(Math.min(viewH, H * grow));
 
   setSize(dom.stageWrap, videoW, H);
-  setSize(dom.referencePanel, Math.round(videoW * grow), H);
+  setSize(dom.referencePanel, Math.round(refH * refAr), refH);
   if (dom.midResize) dom.midResize.style.height = `${H}px`;
 }
 
@@ -174,6 +189,12 @@ export function renderOverlay() {
       dom.lblA.textContent = stripExt(b.name) + ' (B)';
     }
   }
+
+  // bottom-corner side markers: both in slider/dissolve; only the visible side in toggle
+  const showA = S.mode !== 'toggle' || S.toggleFrame === 'a';
+  const showB = S.mode !== 'toggle' || S.toggleFrame === 'b';
+  dom.cornerA.style.display = showA ? 'flex' : 'none';
+  dom.cornerB.style.display = showB ? 'flex' : 'none';
 
   const isDissolve = S.mode === 'dissolve';
   dom.dWrap.style.opacity = isDissolve ? '1' : '0.3';

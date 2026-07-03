@@ -52,6 +52,8 @@ export const dom = {
   refScaleWrap: $('ref-scale-wrap'),
   midResize: $('mid-resize'),
   refVideoStage: $('ref-video-stage'),
+  cornerA: $('corner-a'),
+  cornerB: $('corner-b'),
   refVideoLabel: $('ref-video-label'),
   refClear: $('ref-clear'),
 
